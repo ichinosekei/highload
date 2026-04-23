@@ -8,7 +8,7 @@
 - Маленькая команда и ограниченный бюджет исключают полноценные микросервисы (десятки пайплайнов).
 - Монолит не обеспечит изоляцию контуров: при деградации поиска платежи должны работать (НФТ-006).
 - SBA даёт 4 крупных сервиса вместо 10+ микросервисов — посильно для команды.
-- Event-Driven элементы (Kafka) обеспечивают at-least-once delivery для платёжных событий и decoupling уведомлений.
+- Event-Driven элементы (NATS JetStream) обеспечивают at-least-once delivery для платёжных событий и decoupling уведомлений.
 
 ---
 
@@ -65,7 +65,7 @@ graph TB
         CourierApp["🚴 Courier App<br/>(Mobile)"]
     end
 
-    APIGw["🔷 API Gateway<br/>(Kong)<br/>Rate limiting, auth, routing"]
+    APIGw["🔷 API Gateway<br/>(Traefik)<br/>Rate limiting, routing"]
 
     subgraph "Catalog Service"
         CatalogAPI["📦 Catalog Service<br/>(Go)<br/>Рестораны, меню, поиск"]
@@ -84,13 +84,12 @@ graph TB
     end
 
     subgraph "Хранилища"
-        PG_Orders[("🐘 PostgreSQL<br/>Orders DB<br/>Заказы, платежи, outbox")]
-        PG_Catalog[("🐘 PostgreSQL<br/>Catalog DB<br/>Рестораны, меню")]
-        ES[("🔍 Elasticsearch<br/>Поисковый индекс")]
-        Redis[("⚡ Redis<br/>Корзина, кэш, трекинг")]
+        PG[("🐘 PostgreSQL 18<br/>Single Instance<br/>Multiple DBs (Orders, Catalog)")]
+        MS[("🔍 Meilisearch<br/>Поисковый индекс")]
+        Redis[("⚡ Redis 7<br/>Корзина, кэш, трекинг")]
     end
 
-    Kafka["📨 Apache Kafka<br/>Брокер сообщений"]
+    NATS["📨 NATS JetStream<br/>Брокер сообщений"]
 
     PSP["💳 PSP (внешний)"]
     PushSMS["📱 Push / SMS"]
@@ -101,20 +100,20 @@ graph TB
     APIGw -->|"sync REST"| OrderAPI
     APIGw -->|"sync REST"| PaymentAPI
 
-    CatalogAPI -->|"read/write"| PG_Catalog
-    CatalogAPI -->|"fulltext search"| ES
+    CatalogAPI -->|"read/write"| PG
+    CatalogAPI -->|"search"| MS
     CatalogAPI -->|"cache read"| Redis
 
-    OrderAPI -->|"read/write + outbox"| PG_Orders
+    OrderAPI -->|"read/write + outbox"| PG
     OrderAPI -->|"корзина, статусы"| Redis
-    OrderAPI -->|"publish events"| Kafka
+    OrderAPI -->|"publish events"| NATS
 
-    PaymentAPI -->|"read/write"| PG_Orders
+    PaymentAPI -->|"read/write"| PG
     PaymentAPI -->|"sync"| PSP
-    PaymentAPI -->|"publish events"| Kafka
+    PaymentAPI -->|"publish events"| NATS
 
-    Kafka -->|"consume events"| NotifAPI
-    Kafka -->|"consume events"| OrderAPI
+    NATS -->|"consume events"| NotifAPI
+    NATS -->|"consume events"| OrderAPI
 
     NotifAPI --> PushSMS
 
@@ -125,16 +124,15 @@ graph TB
 
 | # | Компонент | Назначение | Технология | Коммуникация |
 |---|-----------|-----------|------------|-------------|
-| 1 | **API Gateway** | Единая точка входа: маршрутизация, аутентификация (JWT), rate limiting, TLS termination | Kong | sync (HTTP) с клиентами и сервисами |
-| 2 | **Catalog Service** | Управление каталогом ресторанов и меню; поиск и фильтрация; выдача данных для главной страницы | Go | sync REST (чтение PG + ES + Redis) |
-| 3 | **Order Service** | Управление корзиной, создание заказа, жизненный цикл статусов, трекинг доставки | Go | sync REST (входящий) + async (Kafka events) |
-| 4 | **Payment Service** | Инициация платежа, обработка webhook-ов PSP, фиксация статуса, идемпотентность | Go | sync REST (PSP) + async (Kafka events) |
-| 5 | **Notification Service** | Отправка push/SMS по событиям (подтверждение, оплата, доставка) | Go | async (Kafka consumer → Push/SMS) |
-| 6 | **PostgreSQL (Orders DB)** | Хранение заказов, платежей, outbox-событий. ACID, RPO=0 | PostgreSQL 18 | sync (TCP) |
-| 7 | **PostgreSQL (Catalog DB)** | Хранение ресторанов, меню, блюд. Source of truth для каталога | PostgreSQL 18 | sync (TCP) |
-| 8 | **Elasticsearch** | Полнотекстовый поиск и фасетная фильтрация ресторанов/блюд (10k RPS) | Elasticsearch 8 | sync (HTTP) |
-| 9 | **Redis** | Корзина (TTL), кэш меню, актуальные статусы трекинга | Redis 7 | sync (TCP) |
-| 10 | **Apache Kafka** | Брокер событий: order.created, payment.succeeded, status.updated и т.д. At-least-once delivery | Apache Kafka | async (publish/subscribe) |
+| 1 | **API Gateway** | Маршрутизация, SSL, Rate limiting | Traefik OSS | sync (HTTP) |
+| 2 | **Catalog Service** | Управление каталогом и поиск | Go | sync REST |
+| 3 | **Order Service** | Корзина, заказы, статусы | Go | sync REST + async (NATS) |
+| 4 | **Payment Service** | Платежи и идемпотентность | Go | sync REST + async (NATS) |
+| 5 | **Notification Service** | Отправка уведомлений | Go | async (NATS consumer) |
+| 6 | **PostgreSQL** | Source of Truth для всех сервисов (разные БД) | PostgreSQL 18 | sync (TCP) |
+| 7 | **Meilisearch** | Поиск и фильтрация | Meilisearch | sync (HTTP) |
+| 8 | **Redis** | Корзина, кэш, трекинг | Redis 7 | sync (TCP) |
+| 9 | **NATS JetStream** | Брокер сообщений (At-least-once) | NATS | async (Pub/Sub) |
 
 ---
 
@@ -148,10 +146,10 @@ sequenceDiagram
     participant GW as API Gateway
     participant OS as Order Service
     participant Redis as Redis
-    participant PG as PostgreSQL (Orders)
+    participant PG as PostgreSQL
     participant PS as Payment Service
     participant PSP as PSP (внешний)
-    participant Kafka as Kafka
+    participant NATS as NATS
     participant NS as Notification Service
 
     Client->>GW: POST /api/v1/orders (idempotency_key)
@@ -160,7 +158,7 @@ sequenceDiagram
     Redis-->>OS: items + total
     OS->>PG: BEGIN TX: INSERT order + INSERT outbox_event
     PG-->>OS: order_id, status=created
-    OS->>Kafka: publish order.created (via outbox relay)
+    OS->>NATS: publish order.created (via outbox relay)
     OS-->>GW: 201 {order_id, status: created}
     GW-->>Client: 201 Created
 
@@ -177,10 +175,10 @@ sequenceDiagram
     PSP->>PS: webhook (payment.succeeded)
     PS->>PG: BEGIN TX: UPDATE payment=succeeded + UPDATE order=accepted + INSERT outbox
     PG-->>PS: OK
-    PS->>Kafka: publish payment.succeeded
+    PS->>NATS: publish payment.succeeded
     PS-->>PSP: 200 OK
 
-    Kafka->>NS: consume payment.succeeded
+    NATS->>NS: consume payment.succeeded
     NS->>Client: push "Заказ оплачен и принят!"
 ```
 
@@ -191,9 +189,9 @@ sequenceDiagram
     actor Client as Клиент
     participant GW as API Gateway
     participant PS as Payment Service
-    participant PG as PostgreSQL (Orders)
+    participant PG as PostgreSQL
     participant PSP as PSP (внешний)
-    participant Kafka as Kafka
+    participant NATS as NATS
     participant NS as Notification Service
 
     Client->>GW: POST /api/v1/payments (order_id, idempotency_key)
@@ -208,8 +206,8 @@ sequenceDiagram
     PS-->>GW: 503 {error: "payment_provider_unavailable", retry_after: 30}
     GW-->>Client: 503 Service Unavailable
 
-    PS->>Kafka: publish payment.failed (reason: psp_timeout)
-    Kafka->>NS: consume payment.failed
+    PS->>NATS: publish payment.failed (reason: psp_timeout)
+    NATS->>NS: consume payment.failed
     NS->>Client: push "Оплата не прошла. Попробуйте позже."
 
     Note over Client: Повторная попытка через 30 сек (тот же idempotency_key)
@@ -232,9 +230,9 @@ sequenceDiagram
     actor Courier as Курьер
     participant GW as API Gateway
     participant OS as Order Service
-    participant PG as PostgreSQL (Orders)
+    participant PG as PostgreSQL
     participant Redis as Redis
-    participant Kafka as Kafka
+    participant NATS as NATS
     participant NS as Notification Service
     actor Client as Клиент
 
@@ -242,21 +240,21 @@ sequenceDiagram
     GW->>OS: forward
     OS->>PG: UPDATE order SET status=cooking
     OS->>Redis: SET tracking:{order_id} = cooking
-    OS->>Kafka: publish order.status_updated (cooking)
+    OS->>NATS: publish order.status_updated (cooking)
     OS-->>GW: 200 OK
     GW-->>Rest: 200 OK
 
-    Kafka->>NS: consume order.status_updated
+    NATS->>NS: consume order.status_updated
     NS->>Client: push "Ваш заказ готовится 🍳"
 
     Rest->>GW: POST /api/v1/orders/{id}/status {status: ready}
     GW->>OS: forward
     OS->>PG: UPDATE order SET status=ready
     OS->>Redis: SET tracking:{order_id} = ready
-    OS->>Kafka: publish order.status_updated (ready)
+    OS->>NATS: publish order.status_updated (ready)
     OS-->>GW: 200 OK
 
-    Kafka->>NS: consume order.status_updated (ready)
+    NATS->>NS: consume order.status_updated (ready)
     NS->>Courier: push "Заказ готов, заберите!"
     NS->>Client: push "Заказ готов, ожидаем курьера"
 
@@ -264,10 +262,10 @@ sequenceDiagram
     GW->>OS: forward
     OS->>PG: UPDATE order SET status=on_the_way
     OS->>Redis: SET tracking:{order_id} = on_the_way
-    OS->>Kafka: publish order.status_updated (on_the_way)
+    OS->>NATS: publish order.status_updated (on_the_way)
     OS-->>GW: 200 OK
 
-    Kafka->>NS: consume order.status_updated (on_the_way)
+    NATS->>NS: consume order.status_updated (on_the_way)
     NS->>Client: push "Курьер в пути! 🚴"
 
     Note over Client: GET /api/v1/orders/{id}/track → Redis → мгновенный ответ
@@ -451,14 +449,16 @@ Headers: Authorization: Bearer <token>
 
 | Хранилище | Технология | Назначение | Обоснование |
 |-----------|-----------|-----------|-------------|
-| Orders DB | PostgreSQL 18 | Заказы, платежи, outbox | ACID, RPO=0, идемпотентность через unique constraint |
-| Catalog DB | PostgreSQL 18 | Рестораны, меню, блюда | Структурированные данные со связями, source of truth |
-| Search Index | Elasticsearch 8 | Полнотекстовый поиск | Фасетная фильтрация, 10k RPS, горизонтальное масштабирование |
+| Orders DB | PostgreSQL 18 (БД `orders_db`) | Заказы, платежи, outbox | ACID, RPO=0, идемпотентность через unique constraint |
+| Catalog DB | PostgreSQL 18 (БД `catalog_db`) | Рестораны, меню, блюда | Структурированные данные со связями, source of truth |
+| Search Index | Meilisearch | Поиск и фильтрация | Лёгкий (Rust), typo-tolerance, фасетные фильтры |
 | Cache / Sessions | Redis 7 | Корзина, кэш, трекинг | In-memory, TTL, sub-ms latency |
+
+> **Примечание:** Orders DB и Catalog DB — это разные **логические базы данных** внутри одного инстанса PostgreSQL 18 ([ADR-004](adr/004-resource-optimization.md)).
 
 ### 5.2 Модель данных — основные сущности
 
-#### Таблица `orders` (PostgreSQL — Orders DB)
+#### Таблица `orders` (PostgreSQL — `orders_db`)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -483,7 +483,7 @@ Headers: Authorization: Bearer <token>
 
 **Объём:** ~21.9 млн записей/год, ~26 GB/год (без индексов).
 
-#### Таблица `payments` (PostgreSQL — Orders DB)
+#### Таблица `payments` (PostgreSQL — `orders_db`)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -504,7 +504,7 @@ Headers: Authorization: Bearer <token>
 
 **Объём:** ~21.9 млн записей/год, ~17.5 GB/год.
 
-#### Таблица `restaurants` (PostgreSQL — Catalog DB)
+#### Таблица `restaurants` (PostgreSQL — `catalog_db`)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -524,7 +524,7 @@ Headers: Authorization: Bearer <token>
 
 **Объём:** ~200,000 записей, ~200 MB.
 
-#### Таблица `menu_items` (PostgreSQL — Catalog DB)
+#### Таблица `menu_items` (PostgreSQL — `catalog_db`)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -544,7 +544,7 @@ Headers: Authorization: Bearer <token>
 
 **Объём:** ~16 млн записей (200k × 80), ~9.6 GB.
 
-#### Таблица `outbox_events` (PostgreSQL — Orders DB)
+#### Таблица `outbox_events` (PostgreSQL — `orders_db`)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -553,7 +553,7 @@ Headers: Authorization: Bearer <token>
 | `aggregate_id` | UUID v7 | ID заказа или платежа |
 | `event_type` | VARCHAR(100) | order.created, payment.succeeded, ... |
 | `payload` | JSONB | Тело события |
-| `published` | BOOLEAN DEFAULT FALSE | Опубликовано ли в Kafka |
+| `published` | BOOLEAN DEFAULT FALSE | Опубликовано ли в NATS |
 | `created_at` | TIMESTAMPTZ | |
 
 **Индексы:**
@@ -581,3 +581,4 @@ Headers: Authorization: Bearer <token>
 | ADR-001 | Выбор архитектурного стиля (SBA) | [docs/adr/001-architecture-style.md](adr/001-architecture-style.md) |
 | ADR-002 | Выбор баз данных | [docs/adr/002-database-choice.md](adr/002-database-choice.md) |
 | ADR-003 | Надёжность платежей (Transactional Outbox + Idempotency) | [docs/adr/003-payment-reliability.md](adr/003-payment-reliability.md) |
+| ADR-004 | Оптимизация под ограниченные ресурсы (2 vCPU, 8 GB) | [docs/adr/004-resource-optimization.md](adr/004-resource-optimization.md) |
