@@ -1,0 +1,346 @@
+networks:
+  backend:
+    driver: bridge
+  data:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: highload-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_DB: postgres
+    volumes:
+      - ./deployments/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d postgres" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: 1536M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: highload-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyRequired16Chars}
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_HTTP_ADDR: 0.0.0.0:7700
+      MEILI_DB_PATH: /meili_data/data.ms
+    volumes:
+      - meili_data:/meili_data
+    networks:
+      - data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:7700/health",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 800M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: highload-redis
+    restart: unless-stopped
+    command: >-
+      redis-server --requirepass ${REDIS_PASSWORD:-redis_password} --maxmemory
+      400mb --maxmemory-policy allkeys-lru
+    networks:
+      - data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password}", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: highload-nats
+    restart: unless-stopped
+    command: "-js -m 8222"
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8222/healthz",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 150M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  catalog:
+    build:
+      context: .
+      dockerfile: services/catalog/Dockerfile
+    image: highload-catalog
+    container_name: highload-catalog
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    networks:
+      - backend
+      - data
+    environment:
+      - APP_ENV=${APP_ENV:-local}
+      - PORT=8080
+      - POSTGRES_URL=postgres://${POSTGRES_USER:-postgres_user}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/catalog_db?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - MEILI_HOST=http://meilisearch:7700
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-masterKeyRequired16Chars}
+      - CACHE_TTL_SEARCH=${CACHE_TTL_SEARCH:-1m}
+      - CACHE_TTL_MENU=${CACHE_TTL_MENU:-5m}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8080/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 300M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  order:
+    build:
+      context: .
+      dockerfile: services/order/Dockerfile
+    image: highload-order
+    container_name: highload-order
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - backend
+      - data
+    environment:
+      - APP_ENV=${APP_ENV:-local}
+      - PORT=8082
+      - POSTGRES_URL=postgres://${POSTGRES_USER:-postgres_user}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/orders_db?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - NATS_URL=nats://nats:4222
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8082/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 300M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  payment:
+    build:
+      context: .
+      dockerfile: services/payment/Dockerfile
+    image: highload-payment
+    container_name: highload-payment
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - backend
+      - data
+    environment:
+      - APP_ENV=${APP_ENV:-local}
+      - PORT=8083
+      - POSTGRES_URL=postgres://${POSTGRES_USER:-postgres_user}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/orders_db?sslmode=disable
+      - NATS_URL=nats://nats:4222
+      - PSP_BASE_URL=${PSP_BASE_URL:-https://psp.example.com}
+      - PSP_TIMEOUT=${PSP_TIMEOUT:-3s}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8083/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 300M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  notification:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
+    image: highload-notification
+    container_name: highload-notification
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - backend
+    environment:
+      - APP_ENV=${APP_ENV:-local}
+      - PORT=8081
+      - NATS_URL=nats://nats:4222
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8081/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 200M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+  meili_data:

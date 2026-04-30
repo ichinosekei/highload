@@ -1,0 +1,31 @@
+INSERT INTO orders (id, user_id, restaurant_id, status, items_json, total_amount, delivery_fee, delivery_address, comment, idempotency_key)
+VALUES
+    ('0196ca5b-8fd3-7c09-b2f4-c4f3b6c8d001',
+     '0196ca5b-8fd3-7c09-b2f4-d4f3b6c8d001',
+     '0196ca5b-8fd3-7c09-b2f4-a4f3b6c8d901',
+     'created',
+     '[{"menu_item_id": "0196ca5b-8fd3-7c09-b2f4-b4f3b6c8d001", "quantity": 2, "options": ["extra_cheese"]}, {"menu_item_id": "0196ca5b-8fd3-7c09-b2f4-b4f3b6c8d002", "quantity": 1}]',
+     159700, 149,
+     '{"address_text": "ул. Пушкина, д. 10, кв. 5", "lat": 55.75, "lon": 37.62}',
+     'Не звонить, домофон 105',
+     '0196ca5b-8fd3-7c09-b2f4-e4f3b6c8d001'),
+
+    ('0196ca5b-8fd3-7c09-b2f4-c4f3b6c8d002',
+     '0196ca5b-8fd3-7c09-b2f4-d4f3b6c8d001',
+     '0196ca5b-8fd3-7c09-b2f4-a4f3b6c8d902',
+     'cooking',
+     '[{"menu_item_id": "0196ca5b-8fd3-7c09-b2f4-b4f3b6c8d005", "quantity": 1}]',
+     69900, 199,
+     '{"address_text": "ул. Ленина, д. 5", "lat": 55.76, "lon": 37.63}',
+     '',
+     '0196ca5b-8fd3-7c09-b2f4-e4f3b6c8d002'),
+
+    ('0196ca5b-8fd3-7c09-b2f4-c4f3b6c8d003',
+     '0196ca5b-8fd3-7c09-b2f4-d4f3b6c8d002',
+     '0196ca5b-8fd3-7c09-b2f4-a4f3b6c8d903',
+     'delivered',
+     '[{"menu_item_id": "0196ca5b-8fd3-7c09-b2f4-b4f3b6c8d007", "quantity": 2}]',
+     59800, 99,
+     '{"address_text": "ул. Тверская, д. 20", "lat": 55.77, "lon": 37.61}',
+     '',
+     '0196ca5b-8fd3-7c09-b2f4-e4f3b6c8d003');

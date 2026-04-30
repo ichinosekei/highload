@@ -1,0 +1,130 @@
+[env]
+_.file = ".env"
+
+[tools]
+go = "1.26.2"
+golangci-lint = "2.11.4"
+
+# --- Linting ---
+[tasks.lint]
+run = "mise x golangci-lint@2.11.4 -- golangci-lint run ./..."
+alias = "l"
+description = "Run project-wide linter"
+
+[tasks.lint-catalog]
+run = "mise x golangci-lint@2.11.4 -- golangci-lint run ./services/catalog/..."
+alias = "lc"
+description = "Run linter for catalog service"
+
+[tasks.lint-notification]
+run = "mise x golangci-lint@2.11.4 -- golangci-lint run ./services/notification/..."
+alias = "ln"
+description = "Run linter for notification service"
+
+[tasks.lint-order]
+run = "mise x golangci-lint@2.11.4 -- golangci-lint run ./services/order/..."
+alias = "lo"
+description = "Run linter for order service"
+
+[tasks.lint-payment]
+run = "mise x golangci-lint@2.11.4 -- golangci-lint run ./services/payment/..."
+alias = "lp"
+description = "Run linter for payment service"
+
+# --- Run services ---
+[tasks.catalog]
+run = "go run services/catalog/cmd/main.go"
+alias = "c"
+description = "Run catalog service"
+
+[tasks.notification]
+run = "go run services/notification/cmd/notification/main.go"
+alias = "n"
+description = "Run notification service"
+
+[tasks.order]
+run = "go run services/order/cmd/main.go"
+alias = "o"
+description = "Run order service"
+
+[tasks.payment]
+run = "go run services/payment/cmd/main.go"
+alias = "p"
+description = "Run payment service"
+
+# --- Unit tests (fast, no Docker) ---
+[tasks.utest-all]
+run = "go test -v -short ./..."
+alias = "uta"
+description = "Run all unit tests (no Docker required)"
+
+[tasks.utest-catalog]
+run = "go test -v -short ./services/catalog/..."
+alias = "utc"
+description = "Run unit tests for catalog service (no Docker required)"
+
+[tasks.utest-notification]
+run = "go test -v -short ./services/notification/..."
+alias = "utn"
+description = "Run unit tests for notification service (no Docker required)"
+
+[tasks.utest-order]
+run = "go test -v -short ./services/order/..."
+alias = "uto"
+description = "Run unit tests for order service (no Docker required)"
+
+[tasks.utest-payment]
+run = "go test -v -short ./services/payment/..."
+alias = "utp"
+description = "Run unit tests for payment service (no Docker required)"
+
+# --- Integration tests (require Docker) ---
+[tasks.test-all]
+run = "go test -v -count=1 ./..."
+alias = "ta"
+description = "Run all tests including integration (Testcontainers)"
+
+[tasks.test-order]
+run = "go test -v -count=1 ./services/order/..."
+alias = "to"
+description = "Run all order tests, including integration (Testcontainers)"
+
+[tasks.test-payment]
+run = "go test -v -count=1 ./services/payment/..."
+alias = "tp"
+description = "Run all payment tests, including integration (Testcontainers)"
+
+[tasks.test-catalog]
+run = "go test -v -count=1 ./services/catalog/..."
+alias = "tc"
+description = "Run all catalog tests, including integration (Testcontainers)"
+
+# --- Infrastructure ---
+[tasks.up]
+run = "docker compose up -d"
+description = "Start all services via Docker Compose"
+
+[tasks.down]
+run = "docker compose down"
+description = "Stop all services"
+
+[tasks.deploy]
+run = "bash scripts/deploy.sh"
+description = "Deploy to remote VM (pass user@host as arg)"
+
+# --- Load Testing ---
+[tasks.load-smoke]
+run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=smoke - <loadtest/stress.js"
+description = "Run smoke load test (k6 via Docker)"
+
+[tasks.load-stress]
+run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <loadtest/stress.js"
+description = "Run sustained load test (k6 via Docker)"
+
+[tasks.seed]
+run = "go run scripts/seed/main.go"
+description = "Seed databases with large realistic dataset"
+
+[tasks.measure-baseline]
+run = "mise run load-stress > docs/baseline_iteration_0.txt"
+description = "Run stress test and save as Baseline Iteration 0"

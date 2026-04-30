@@ -1,0 +1,11 @@
+# Environment variables
+.env*
+!.env.example
+
+# Go
+bin/
+vendor/
+
+# IDEs
+.idea/
+.vscode/

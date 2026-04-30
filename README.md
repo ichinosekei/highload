@@ -25,3 +25,33 @@
 *   **Messaging:** NATS JetStream
 *   **API Gateway:** Traefik OSS
 *   **Infrastructure:** Cloud-based (VM: 2 vCPU, 8 GB RAM) + CDN для статики
+
+## 🚀 Как запустить
+30: 
+31: ```bash
+32: # 1. Клонируйте репозиторий
+33: git clone <repo_url>
+34: cd highload
+35: 
+36: # 2. Запустите все сервисы
+37: docker compose up -d
+38: ```
+39: 
+40: ### Проверка работоспособности
+41: - **Catalog Service:** `http://localhost:8080/health`
+42: - **Notification Service:** `http://localhost:8081/health`
+43: - **NATS Management:** `http://localhost:8222`
+44: 
+45: ## 🧩 Примененные паттерны
+46: 
+47: 1. **Event-Driven Consumer (Notification Service)**:
+48:    - Решает проблему связности (decoupling). Уведомления отправляются асинхронно при поступлении событий в NATS.
+49:    - Код: [consumer.go](services/notification/internal/delivery/nats/consumer.go)
+50: 2. **Transactional Outbox (в планах для Order/Payment)**:
+51:    - Обеспечивает At-Least-Once доставку событий из БД в NATS.
+52: 3. **Dependency Injection**:
+53:    - Обеспечивает тестируемость через интерфейсы.
+54:    - Код: [service.go](services/notification/internal/app/service.go)
+55: 4. **Mock Object (для тестов)**:
+56:    - Позволяет тестировать бизнес-логику без реальных Push/SMS провайдеров.
+57:    - Код: [mocks.go](services/notification/internal/domain/mocks.go)
