@@ -10,7 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/ichinosekei/highload/internal/resilience"
 	"github.com/ichinosekei/highload/services/payment/internal/domain"
+	"github.com/sony/gobreaker/v2"
 )
 
 type Handler struct {
@@ -19,6 +21,7 @@ type Handler struct {
 	psp       domain.PSPClient
 	publisher domain.EventPublisher
 	logger    *slog.Logger
+	pspCB     *gobreaker.CircuitBreaker[*domain.PSPResponse]
 }
 
 func NewHandler(
@@ -34,6 +37,7 @@ func NewHandler(
 		psp:       psp,
 		publisher: publisher,
 		logger:    logger,
+		pspCB:     resilience.NewDefaultCircuitBreaker[*domain.PSPResponse]("psp"),
 	}
 }
 
@@ -118,8 +122,10 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initiate payment with PSP.
-	pspResp, err := h.psp.InitiatePayment(r.Context(), amount, req.ReturnURL)
+	// Initiate payment with PSP (with Circuit Breaker).
+	pspResp, err := h.pspCB.Execute(func() (*domain.PSPResponse, error) {
+		return h.psp.InitiatePayment(r.Context(), amount, req.ReturnURL)
+	})
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "psp initiate payment", "error", err)
 		// Payment is created but PSP failed — mark as failed.
@@ -227,7 +233,9 @@ func (h *Handler) publishPaymentEvent(r *http.Request, payment *domain.Payment, 
 		return
 	}
 
-	if err := h.publisher.Publish(r.Context(), eventType, payload); err != nil {
+	if err := resilience.Retry(r.Context(), func() error {
+		return h.publisher.Publish(r.Context(), eventType, payload)
+	}); err != nil {
 		h.logger.WarnContext(r.Context(), "publish payment event", "error", err)
 	}
 }

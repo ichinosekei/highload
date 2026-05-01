@@ -20,9 +20,10 @@ const (
 )
 
 type Handler struct {
-	menuRes domain.MenuRestaurantReader
-	search  domain.RestaurantSearcher
-	logger  *slog.Logger
+	menuRes   domain.MenuRestaurantReader
+	search    domain.RestaurantSearcher
+	logger    *slog.Logger
+	searchSem chan struct{} // Bulkhead semaphore
 }
 
 func NewHandler(
@@ -31,9 +32,10 @@ func NewHandler(
 	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
-		menuRes: menuRes,
-		search:  search,
-		logger:  logger,
+		menuRes:   menuRes,
+		search:    search,
+		logger:    logger,
+		searchSem: make(chan struct{}, 100), // Limit search to 100 concurrent requests
 	}
 }
 
@@ -121,6 +123,16 @@ func (h *Handler) GetRestaurantMenu(w http.ResponseWriter, r *http.Request) {
 
 // Search handles GET /api/v1/search.
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
+	// Bulkhead: limit concurrent search requests
+	select {
+	case h.searchSem <- struct{}{}:
+		defer func() { <-h.searchSem }()
+	default:
+		h.logger.WarnContext(r.Context(), "search bulkhead saturated")
+		h.writeError(w, r, http.StatusServiceUnavailable, "search service too busy")
+		return
+	}
+
 	limit, offset, err := parsePagination(r)
 	if err != nil {
 		h.writeError(w, r, http.StatusBadRequest, err.Error())
@@ -143,8 +155,12 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.search.Search(r.Context(), params)
 	if err != nil {
-		h.logger.ErrorContext(r.Context(), "search restaurants", "error", err)
-		h.writeError(w, r, http.StatusInternalServerError, "search service unavailable")
+		h.logger.WarnContext(r.Context(), "search service unavailable, returning empty fallback", "error", err)
+		// Fallback: return empty result instead of 500 error
+		h.writeJSON(w, r, http.StatusOK, &domain.SearchResult{
+			Items: []domain.Restaurant{},
+			Total: 0,
+		})
 		return
 	}
 

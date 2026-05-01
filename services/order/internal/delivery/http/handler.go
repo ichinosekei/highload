@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/ichinosekei/highload/internal/resilience"
 	"github.com/ichinosekei/highload/services/order/internal/domain"
 )
 
@@ -203,7 +204,9 @@ func (h *Handler) publishOrderCreated(r *http.Request, order *domain.Order) {
 		return
 	}
 
-	if err := h.publisher.Publish(r.Context(), domain.EventOrderCreated, payload); err != nil {
+	if err := resilience.Retry(r.Context(), func() error {
+		return h.publisher.Publish(r.Context(), domain.EventOrderCreated, payload)
+	}); err != nil {
 		h.logger.WarnContext(r.Context(), "publish order.created event", "error", err)
 	}
 }

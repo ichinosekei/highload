@@ -1,0 +1,74 @@
+http:
+  routers:
+    catalog:
+      rule: "PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/restaurants`)"
+      service: catalog
+      entryPoints:
+        - web
+      middlewares:
+        - catalog-ratelimit
+        - compress
+
+    order:
+      rule: "PathPrefix(`/api/v1/orders`)"
+      service: order
+      entryPoints:
+        - web
+      middlewares:
+        - order-ratelimit
+        - compress
+
+    payment:
+      rule: "PathPrefix(`/api/v1/payments`)"
+      service: payment
+      entryPoints:
+        - web
+      middlewares:
+        - payment-ratelimit
+        - compress
+
+  middlewares:
+    catalog-ratelimit:
+      rateLimit:
+        average: 1000
+        burst: 200
+    order-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+    payment-ratelimit:
+      rateLimit:
+        average: 50
+        burst: 20
+    compress:
+      compress: {}
+
+  services:
+    catalog:
+      loadBalancer:
+        servers:
+          - url: "http://catalog:8080"
+        healthCheck:
+          path: /health
+          interval: "5s"
+          timeout: "3s"
+        responseForwarding:
+          flushInterval: "100ms"
+
+    order:
+      loadBalancer:
+        servers:
+          - url: "http://order:8082"
+        healthCheck:
+          path: /health
+          interval: "5s"
+          timeout: "3s"
+
+    payment:
+      loadBalancer:
+        servers:
+          - url: "http://payment:8083"
+        healthCheck:
+          path: /health
+          interval: "5s"
+          timeout: "3s"

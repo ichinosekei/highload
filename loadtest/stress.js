@@ -14,9 +14,9 @@ const ordersCreated = new Counter('orders_created');
 
 // Configuration — override with env vars or CLI flags.
 const BASE_URL = __ENV.BASE_URL || 'http://localhost';
-const CATALOG_URL = `${BASE_URL}:8080`;
-const ORDER_URL = `${BASE_URL}:8082`;
-const PAYMENT_URL = `${BASE_URL}:8083`;
+const CATALOG_URL = BASE_URL; // Traefik on port 80
+const ORDER_URL = BASE_URL;
+const PAYMENT_URL = BASE_URL;
 
 // Restaurant and menu item IDs — set after seeding.
 const RESTAURANT_ID = __ENV.RESTAURANT_ID || '0196ca5b-8fd3-7c09-b2f4-a4f3b6c8d901';

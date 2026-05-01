@@ -63,6 +63,10 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// --- Handlers ---
 	h := order_http.NewHandler(orderRepo, cartRepo, publisher, logger)
 
+	// --- Outbox Relay ---
+	relay := app.NewOutboxRelay(db, publisher, logger)
+	go relay.Start(ctx)
+
 	// --- Router ---
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
