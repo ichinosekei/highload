@@ -60,16 +60,16 @@ func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, status int,
 
 // ListRestaurants handles GET /api/v1/catalog/restaurants.
 func (h *Handler) ListRestaurants(w http.ResponseWriter, r *http.Request) {
-	limit, offset, errParse := parsePagination(r)
-	if errParse != nil {
-		h.logger.DebugContext(r.Context(), "parse pagination", "error", errParse)
-		h.writeError(w, r, http.StatusBadRequest, errParse.Error())
+	limit, offset, err := parsePagination(r)
+	if err != nil {
+		h.logger.DebugContext(r.Context(), "parse pagination", "error", err)
+		h.writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	restaurants, errList := h.menuRes.List(r.Context(), limit, offset)
-	if errList != nil {
-		h.logger.ErrorContext(r.Context(), "list restaurants", "error", errList)
+	restaurants, err := h.menuRes.List(r.Context(), limit, offset)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "list restaurants", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -84,27 +84,27 @@ func (h *Handler) ListRestaurants(w http.ResponseWriter, r *http.Request) {
 // GetRestaurantMenu handles GET /api/v1/catalog/restaurants/{restaurantID}/menu.
 func (h *Handler) GetRestaurantMenu(w http.ResponseWriter, r *http.Request) {
 	restaurantIDStr := chi.URLParam(r, "restaurantID")
-	restaurantID, errParse := uuid.Parse(restaurantIDStr)
-	if errParse != nil {
+	restaurantID, err := uuid.Parse(restaurantIDStr)
+	if err != nil {
 		h.writeError(w, r, http.StatusBadRequest, "invalid restaurant_id format")
 		return
 	}
 
 	// Verify restaurant exists.
-	restaurant, errGet := h.menuRes.GetByID(r.Context(), restaurantID)
-	if errGet != nil {
-		if errors.Is(errGet, domain.ErrNotFound) {
+	restaurant, err := h.menuRes.GetByID(r.Context(), restaurantID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
 			h.writeError(w, r, http.StatusNotFound, "restaurant not found")
 			return
 		}
-		h.logger.ErrorContext(r.Context(), "get restaurant by id", "error", errGet, "restaurant_id", restaurantID)
+		h.logger.ErrorContext(r.Context(), "get restaurant by id", "error", err, "restaurant_id", restaurantID)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	items, errList := h.menuRes.ListByRestaurant(r.Context(), restaurantID)
-	if errList != nil {
-		h.logger.ErrorContext(r.Context(), "list menu items", "error", errList, "restaurant_id", restaurantID)
+	items, err := h.menuRes.ListByRestaurant(r.Context(), restaurantID)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "list menu items", "error", err, "restaurant_id", restaurantID)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -121,9 +121,9 @@ func (h *Handler) GetRestaurantMenu(w http.ResponseWriter, r *http.Request) {
 
 // Search handles GET /api/v1/search.
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
-	limit, offset, errPagination := parsePagination(r)
-	if errPagination != nil {
-		h.writeError(w, r, http.StatusBadRequest, errPagination.Error())
+	limit, offset, err := parsePagination(r)
+	if err != nil {
+		h.writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -141,9 +141,9 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		Offset:  offset,
 	}
 
-	result, errSearch := h.search.Search(r.Context(), params)
-	if errSearch != nil {
-		h.logger.ErrorContext(r.Context(), "search restaurants", "error", errSearch)
+	result, err := h.search.Search(r.Context(), params)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "search restaurants", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "search service unavailable")
 		return
 	}

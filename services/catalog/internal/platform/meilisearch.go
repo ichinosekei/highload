@@ -28,20 +28,20 @@ func (c *MeiliClient) InitIndices(ctx context.Context) error {
 	index := c.Index("restaurants")
 
 	filterable := []any{"cuisine", "rating", "is_active"}
-	taskFilterable, errFilterable := index.UpdateFilterableAttributesWithContext(ctx, &filterable)
-	if errFilterable != nil {
-		return fmt.Errorf("update filterable attributes: %w", errFilterable)
+	taskFilterable, err := index.UpdateFilterableAttributesWithContext(ctx, &filterable)
+	if err != nil {
+		return fmt.Errorf("update filterable attributes: %w", err)
 	}
-	if _, err := c.WaitForTaskWithContext(ctx, taskFilterable.TaskUID, defaultMeiliTimeout); err != nil {
+	if _, err = c.WaitForTaskWithContext(ctx, taskFilterable.TaskUID, defaultMeiliTimeout); err != nil {
 		return fmt.Errorf("wait for filterable attributes: %w", err)
 	}
 
 	sortable := []string{"rating", "delivery_time_min", "delivery_fee"}
-	taskSortable, errSortable := index.UpdateSortableAttributesWithContext(ctx, &sortable)
-	if errSortable != nil {
-		return fmt.Errorf("update sortable attributes: %w", errSortable)
+	taskSortable, err := index.UpdateSortableAttributesWithContext(ctx, &sortable)
+	if err != nil {
+		return fmt.Errorf("update sortable attributes: %w", err)
 	}
-	if _, err := c.WaitForTaskWithContext(ctx, taskSortable.TaskUID, defaultMeiliTimeout); err != nil {
+	if _, err = c.WaitForTaskWithContext(ctx, taskSortable.TaskUID, defaultMeiliTimeout); err != nil {
 		return fmt.Errorf("wait for sortable attributes: %w", err)
 	}
 

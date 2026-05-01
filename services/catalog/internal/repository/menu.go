@@ -29,16 +29,16 @@ func (r *MenuRepository) ListByRestaurant(
 		WHERE restaurant_id = $1 AND is_available = true
 		ORDER BY category, name
 	`
-	rows, errQuery := r.db.Pool.Query(ctx, query, restaurantID)
-	if errQuery != nil {
-		return nil, fmt.Errorf("list menu items for restaurant %s: %w", restaurantID, errQuery)
+	rows, err := r.db.Pool.Query(ctx, query, restaurantID)
+	if err != nil {
+		return nil, fmt.Errorf("list menu items for restaurant %s: %w", restaurantID, err)
 	}
 	defer rows.Close()
 
 	var items []domain.MenuItem
 	for rows.Next() {
 		var item domain.MenuItem
-		errScan := rows.Scan(
+		if err := rows.Scan(
 			&item.ID,
 			&item.RestaurantID,
 			&item.Name,
@@ -48,15 +48,14 @@ func (r *MenuRepository) ListByRestaurant(
 			&item.IsAvailable,
 			&item.ImageURLs,
 			&item.Options,
-		)
-		if errScan != nil {
-			return nil, fmt.Errorf("scan menu item row: %w", errScan)
+		); err != nil {
+			return nil, fmt.Errorf("scan menu item row: %w", err)
 		}
 		items = append(items, item)
 	}
 
-	if errRows := rows.Err(); errRows != nil {
-		return nil, fmt.Errorf("iterate menu item rows: %w", errRows)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate menu item rows: %w", err)
 	}
 
 	return items, nil

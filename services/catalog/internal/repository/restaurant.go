@@ -29,16 +29,16 @@ func (r *RestaurantRepository) List(ctx context.Context, limit, offset int64) ([
 		ORDER BY rating DESC
 		LIMIT $1 OFFSET $2
 	`
-	rows, errQuery := r.db.Pool.Query(ctx, query, limit, offset)
-	if errQuery != nil {
-		return nil, fmt.Errorf("list restaurants: %w", errQuery)
+	rows, err := r.db.Pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list restaurants: %w", err)
 	}
 	defer rows.Close()
 
 	var restaurants []domain.Restaurant
 	for rows.Next() {
 		var res domain.Restaurant
-		errScan := rows.Scan(
+		if err := rows.Scan(
 			&res.ID,
 			&res.Name,
 			&res.Cuisine,
@@ -49,15 +49,14 @@ func (r *RestaurantRepository) List(ctx context.Context, limit, offset int64) ([
 			&res.Address,
 			&res.ImageURL,
 			&res.CreatedAt,
-		)
-		if errScan != nil {
-			return nil, fmt.Errorf("scan restaurant row: %w", errScan)
+		); err != nil {
+			return nil, fmt.Errorf("scan restaurant row: %w", err)
 		}
 		restaurants = append(restaurants, res)
 	}
 
-	if errRows := rows.Err(); errRows != nil {
-		return nil, fmt.Errorf("iterate restaurant rows: %w", errRows)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate restaurant rows: %w", err)
 	}
 
 	return restaurants, nil
@@ -71,7 +70,7 @@ func (r *RestaurantRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 		WHERE id = $1
 	`
 	var res domain.Restaurant
-	errScan := r.db.Pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.Pool.QueryRow(ctx, query, id).Scan(
 		&res.ID,
 		&res.Name,
 		&res.Cuisine,
@@ -83,11 +82,11 @@ func (r *RestaurantRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 		&res.ImageURL,
 		&res.CreatedAt,
 	)
-	if errScan != nil {
-		if errors.Is(errScan, pgx.ErrNoRows) {
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("restaurant %s: %w", id, domain.ErrNotFound)
 		}
-		return nil, fmt.Errorf("find restaurant by ID: %w", errScan)
+		return nil, fmt.Errorf("find restaurant by ID: %w", err)
 	}
 
 	return &res, nil

@@ -14,7 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	core_logger "github.com/ichinosekei/highload/internal/logger"
+	shared_handler "github.com/ichinosekei/highload/internal/delivery/http"
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	"github.com/ichinosekei/highload/services/notification/internal/app"
 	"github.com/ichinosekei/highload/services/notification/internal/config"
 	notif_nats "github.com/ichinosekei/highload/services/notification/internal/delivery/nats"
@@ -33,10 +34,10 @@ func main() {
 		panic(fmt.Sprintf("failed to initialize configuration: %v", err))
 	}
 
-	logger := core_logger.NewLogger(cfg.Env, "notification")
+	logger := shared_logger.NewLogger(cfg.Env, "notification")
 
-	if errRun := run(&cfg, logger); errRun != nil {
-		logger.Error("application startup", "error", errRun)
+	if err := run(&cfg, logger); err != nil {
+		logger.Error("application startup", "error", err)
 		os.Exit(1)
 	}
 }
@@ -45,32 +46,29 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// --- Инициализация компонентов ---
+	// --- Infra initialization ---
 	natsClient := app.MustNewNats(ctx, cfg, logger)
 	defer natsClient.Close()
 
-	// --- Провайдеры ---
+	// --- Providers ---
 	mockSender := providers.NewMockSender(logger)
 
-	// --- Сервис ---
+	// --- Services ---
 	svc := app.NewService(mockSender, logger)
 
-	// --- Обработчики (Consumer) ---
+	// --- Consumers ---
 	consumer := notif_nats.NewConsumer(natsClient, svc, logger)
 	if err := consumer.Start(ctx); err != nil {
 		return fmt.Errorf("start nats consumer: %w", err)
 	}
 
-	// --- Health check server ---
+	// --- Router ---
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(serverTimeout))
 
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
+	r.Get("/health", shared_handler.HealthCheck)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -81,22 +79,22 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	serverErrors := make(chan error, 1)
 	go func() {
 		logger.InfoContext(ctx, "notification service health-check server started", "port", cfg.Port)
-		if errServe := srv.ListenAndServe(); errServe != nil && errServe != http.ErrServerClosed {
-			serverErrors <- fmt.Errorf("health server startup: %w", errServe)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrors <- fmt.Errorf("health server startup: %w", err)
 		}
 	}()
 
 	select {
-	case errSrv := <-serverErrors:
-		return errSrv
+	case err := <-serverErrors:
+		return err
 	case <-ctx.Done():
 		logger.InfoContext(context.Background(), "shutting down notification service")
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer shutdownCancel()
 
-		if errShutdown := srv.Shutdown(shutdownCtx); errShutdown != nil {
-			return fmt.Errorf("force server shutdown: %w", errShutdown)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("force server shutdown: %w", err)
 		}
 
 		logger.InfoContext(context.Background(), "service stopped")

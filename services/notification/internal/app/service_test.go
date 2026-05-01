@@ -5,16 +5,17 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	core_logger "github.com/ichinosekei/highload/internal/logger"
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	"github.com/ichinosekei/highload/services/notification/internal/app"
 	"github.com/ichinosekei/highload/services/notification/internal/domain"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestService_ProcessOrderCreated(t *testing.T) {
+	t.Parallel()
 	mockSender := new(domain.MockNotificationSender)
-	logger := core_logger.NewLogger("local", "test")
+	logger := shared_logger.NewLogger("local", "test")
 	svc := app.NewService(mockSender, logger)
 
 	userID := uuid.New()
@@ -25,11 +26,13 @@ func TestService_ProcessOrderCreated(t *testing.T) {
 		Total:   1500,
 	}
 
-	mockSender.On("Send", mock.Anything, mock.MatchedBy(func(n *domain.Notification) bool {
-		return n.UserID == userID && n.Title == "Order Created"
-	})).Return(nil)
+	mockSender.
+		On("Send", mock.Anything, mock.MatchedBy(func(n *domain.Notification) bool {
+			return n.UserID == userID && n.Title == "Order Created"
+		})).
+		Return(nil)
 
 	err := svc.ProcessOrderCreated(context.Background(), payload)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockSender.AssertExpectations(t)
 }

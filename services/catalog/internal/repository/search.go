@@ -57,9 +57,9 @@ func (r *SearchRepository) Search(
 		req.Sort = buildSort(params.Sort)
 	}
 
-	raw, errSearch := r.client.Index("restaurants").SearchRawWithContext(ctx, params.Query, req)
-	if errSearch != nil {
-		return nil, fmt.Errorf("meilisearch search: %w", errSearch)
+	raw, err := r.client.Index("restaurants").SearchRawWithContext(ctx, params.Query, req)
+	if err != nil {
+		return nil, fmt.Errorf("meilisearch search: %w", err)
 	}
 
 	var resp struct {

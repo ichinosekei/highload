@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	core_logger "github.com/ichinosekei/highload/internal/logger"
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	"github.com/ichinosekei/highload/services/order/internal/app"
 	"github.com/ichinosekei/highload/services/order/internal/config"
 	order_http "github.com/ichinosekei/highload/services/order/internal/delivery/http"
@@ -33,7 +33,7 @@ func main() {
 		panic(fmt.Sprintf("failed to initialize configuration: %v", err))
 	}
 
-	logger := core_logger.NewLogger(cfg.Env, "order")
+	logger := shared_logger.NewLogger(cfg.Env, "order")
 
 	if err := run(&cfg, logger); err != nil {
 		logger.Error("application startup", "error", err)
@@ -45,7 +45,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// --- Инициализация компонентов ---
+	// --- Infra initialization ---
 	db := app.MustNewPostgres(ctx, cfg, logger)
 	defer db.Close()
 
@@ -55,15 +55,15 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	natsClient := app.MustNewNats(ctx, cfg, logger)
 	defer natsClient.Close()
 
-	// --- Репозитории ---
+	// --- Repositories ---
 	orderRepo := repository.NewOrderRepository(db)
 	cartRepo := repository.NewCartRepository(rdb)
 	publisher := repository.NewNatsPublisher(natsClient)
 
-	// --- Обработчики ---
+	// --- Handlers ---
 	h := order_http.NewHandler(orderRepo, cartRepo, publisher, logger)
 
-	// --- Роутер ---
+	// --- Router ---
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -76,7 +76,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 
 	r.Route("/api/v1", h.RegisterRoutes)
 
-	// --- Запуск сервера ---
+	// --- Server start ---
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           r,
@@ -86,8 +86,8 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	serverErrors := make(chan error, 1)
 	go func() {
 		logger.InfoContext(ctx, "order service started", "port", cfg.Port)
-		if errServe := srv.ListenAndServe(); errServe != nil && errServe != http.ErrServerClosed {
-			serverErrors <- fmt.Errorf("server startup: %w", errServe)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrors <- fmt.Errorf("server startup: %w", err)
 		}
 	}()
 
@@ -100,8 +100,8 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer shutdownCancel()
 
-		if errShutdown := srv.Shutdown(shutdownCtx); errShutdown != nil {
-			return fmt.Errorf("force server shutdown: %w", errShutdown)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("force server shutdown: %w", err)
 		}
 
 		logger.InfoContext(context.Background(), "server stopped")

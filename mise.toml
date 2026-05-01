@@ -147,10 +147,6 @@ description = "Run smoke load test (k6 via Docker)"
 run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <loadtest/stress.js"
 description = "Run sustained load test (k6 via Docker)"
 
-[tasks.seed]
-run = "go run scripts/seed/main.go"
-description = "Seed databases with large realistic dataset"
-
 [tasks.measure-baseline]
 run = "mise run load-stress > docs/baseline_iteration_0.txt"
 description = "Run stress test and save as Baseline Iteration 0"

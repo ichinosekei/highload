@@ -1,4 +1,4 @@
-package repository_test
+package integration_test
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func setupTestDB(t *testing.T) *platform.PostgresDB {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	t.Cleanup(cancel)
 
-	_, currentFile, _, _ := runtime.Caller(0) //nolint:dogsled // need only file path
+	_, currentFile, _, _ := runtime.Caller(0)
 	testdataDir := filepath.Join(filepath.Dir(currentFile), "testdata")
 
 	pgContainer, errContainer := postgres.Run(ctx,
@@ -87,7 +87,7 @@ var (
 
 // --- PaymentRepository Integration Tests ---
 
-func TestPaymentRepository_Create(t *testing.T) {
+func TestIntegration_PaymentRepository_Create(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewPaymentRepository(db)
 	ctx := context.Background()
@@ -139,7 +139,7 @@ func TestPaymentRepository_Create(t *testing.T) {
 	})
 }
 
-func TestPaymentRepository_GetByID(t *testing.T) {
+func TestIntegration_PaymentRepository_GetByID(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewPaymentRepository(db)
 	ctx := context.Background()
@@ -168,7 +168,7 @@ func TestPaymentRepository_GetByID(t *testing.T) {
 	})
 }
 
-func TestPaymentRepository_GetByPaymentIntentID(t *testing.T) {
+func TestIntegration_PaymentRepository_GetByPaymentIntentID(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewPaymentRepository(db)
 	ctx := context.Background()
@@ -194,7 +194,7 @@ func TestPaymentRepository_GetByPaymentIntentID(t *testing.T) {
 	})
 }
 
-func TestPaymentRepository_UpdateStatus(t *testing.T) {
+func TestIntegration_PaymentRepository_UpdateStatus(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewPaymentRepository(db)
 	ctx := context.Background()
@@ -238,7 +238,7 @@ func TestPaymentRepository_UpdateStatus(t *testing.T) {
 	})
 }
 
-func TestPaymentRepository_UpdatePaymentIntent(t *testing.T) {
+func TestIntegration_PaymentRepository_UpdatePaymentIntent(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewPaymentRepository(db)
 	ctx := context.Background()
@@ -273,7 +273,7 @@ func TestPaymentRepository_UpdatePaymentIntent(t *testing.T) {
 	})
 }
 
-func TestOrderRepository_GetOrderAmount(t *testing.T) {
+func TestIntegration_OrderRepository_GetOrderAmount(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewOrderRepository(db)
 	ctx := context.Background()

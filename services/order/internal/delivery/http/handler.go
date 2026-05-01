@@ -79,8 +79,8 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if errValidate := validateCreateOrder(&req); errValidate != nil {
-		h.writeError(w, r, http.StatusBadRequest, errValidate.Error())
+	if err := validateCreateOrder(&req); err != nil {
+		h.writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -100,8 +100,8 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey:  parsedKey,
 	}
 
-	if errCreate := h.orders.Create(r.Context(), order); errCreate != nil {
-		if errors.Is(errCreate, domain.ErrIdempotencyConflict) {
+	if err := h.orders.Create(r.Context(), order); err != nil {
+		if errors.Is(err, domain.ErrIdempotencyConflict) {
 			existing, errGet := h.orders.GetByIdempotencyKey(r.Context(), parsedKey)
 			if errGet != nil {
 				h.logger.ErrorContext(r.Context(), "get order by idempotency key", "error", errGet)
@@ -111,7 +111,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			h.writeJSON(w, r, http.StatusConflict, existing)
 			return
 		}
-		h.logger.ErrorContext(r.Context(), "create order", "error", errCreate)
+		h.logger.ErrorContext(r.Context(), "create order", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -125,8 +125,8 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 // UpdateOrderStatus handles POST /api/v1/orders/{orderID}/status.
 func (h *Handler) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "orderID")
-	orderID, errParse := uuid.Parse(orderIDStr)
-	if errParse != nil {
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
 		h.writeError(w, r, http.StatusBadRequest, "invalid order_id format")
 		return
 	}
@@ -143,12 +143,12 @@ func (h *Handler) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if errUpdate := h.orders.UpdateStatus(r.Context(), orderID, newStatus); errUpdate != nil {
-		if errors.Is(errUpdate, domain.ErrNotFound) {
+	if err := h.orders.UpdateStatus(r.Context(), orderID, newStatus); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
 			h.writeError(w, r, http.StatusNotFound, "order not found")
 			return
 		}
-		h.logger.ErrorContext(r.Context(), "update order status", "error", errUpdate)
+		h.logger.ErrorContext(r.Context(), "update order status", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -163,19 +163,19 @@ func (h *Handler) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 // TrackOrder handles GET /api/v1/orders/{orderID}/track.
 func (h *Handler) TrackOrder(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "orderID")
-	orderID, errParse := uuid.Parse(orderIDStr)
-	if errParse != nil {
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
 		h.writeError(w, r, http.StatusBadRequest, "invalid order_id format")
 		return
 	}
 
-	order, errGet := h.orders.GetByID(r.Context(), orderID)
-	if errGet != nil {
-		if errors.Is(errGet, domain.ErrNotFound) {
+	order, err := h.orders.GetByID(r.Context(), orderID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
 			h.writeError(w, r, http.StatusNotFound, "order not found")
 			return
 		}
-		h.logger.ErrorContext(r.Context(), "get order for tracking", "error", errGet)
+		h.logger.ErrorContext(r.Context(), "get order for tracking", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -203,8 +203,8 @@ func (h *Handler) publishOrderCreated(r *http.Request, order *domain.Order) {
 		return
 	}
 
-	if errPub := h.publisher.Publish(r.Context(), domain.EventOrderCreated, payload); errPub != nil {
-		h.logger.WarnContext(r.Context(), "publish order.created event", "error", errPub)
+	if err := h.publisher.Publish(r.Context(), domain.EventOrderCreated, payload); err != nil {
+		h.logger.WarnContext(r.Context(), "publish order.created event", "error", err)
 	}
 }
 

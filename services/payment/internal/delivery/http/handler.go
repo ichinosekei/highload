@@ -63,14 +63,14 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsedKey, errKey := uuid.Parse(idempotencyKey)
-	if errKey != nil {
+	parsedKey, err := uuid.Parse(idempotencyKey)
+	if err != nil {
 		h.writeError(w, r, http.StatusBadRequest, "invalid Idempotency-Key format")
 		return
 	}
 
 	var req domain.CreatePaymentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if errDecode := json.NewDecoder(r.Body).Decode(&req); errDecode != nil {
 		h.writeError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -81,9 +81,9 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get order amount.
-	amount, errAmount := h.orders.GetOrderAmount(r.Context(), req.OrderID)
-	if errAmount != nil {
-		h.logger.ErrorContext(r.Context(), "get order amount", "error", errAmount)
+	amount, err := h.orders.GetOrderAmount(r.Context(), req.OrderID)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "get order amount", "error", err)
 		h.writeError(w, r, http.StatusBadRequest, "order not found")
 		return
 	}
@@ -119,9 +119,9 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initiate payment with PSP.
-	pspResp, errPSP := h.psp.InitiatePayment(r.Context(), amount, req.ReturnURL)
-	if errPSP != nil {
-		h.logger.ErrorContext(r.Context(), "psp initiate payment", "error", errPSP)
+	pspResp, err := h.psp.InitiatePayment(r.Context(), amount, req.ReturnURL)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "psp initiate payment", "error", err)
 		// Payment is created but PSP failed — mark as failed.
 		reason := "PSP unavailable"
 		_ = h.payments.UpdateStatus(r.Context(), payment.ID, domain.PaymentStatusFailed, &reason)
@@ -130,8 +130,8 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store payment intent ID.
-	if errIntent := h.payments.UpdatePaymentIntent(r.Context(), payment.ID, pspResp.PaymentIntentID); errIntent != nil {
-		h.logger.ErrorContext(r.Context(), "update payment intent", "error", errIntent)
+	if err := h.payments.UpdatePaymentIntent(r.Context(), payment.ID, pspResp.PaymentIntentID); err != nil {
+		h.logger.ErrorContext(r.Context(), "update payment intent", "error", err)
 	}
 
 	resp := domain.CreatePaymentResponse{
@@ -158,13 +158,13 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payment, errGet := h.payments.GetByPaymentIntentID(r.Context(), req.PaymentIntentID)
-	if errGet != nil {
-		if errors.Is(errGet, domain.ErrNotFound) {
+	payment, err := h.payments.GetByPaymentIntentID(r.Context(), req.PaymentIntentID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
 			h.writeError(w, r, http.StatusNotFound, "payment not found")
 			return
 		}
-		h.logger.ErrorContext(r.Context(), "get payment by intent", "error", errGet)
+		h.logger.ErrorContext(r.Context(), "get payment by intent", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -194,15 +194,15 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update payment status (+ outbox).
-	if errStatus := h.payments.UpdateStatus(r.Context(), payment.ID, newStatus, failureReason); errStatus != nil {
-		h.logger.ErrorContext(r.Context(), "update payment status", "error", errStatus)
+	if err := h.payments.UpdateStatus(r.Context(), payment.ID, newStatus, failureReason); err != nil {
+		h.logger.ErrorContext(r.Context(), "update payment status", "error", err)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	// Update order status.
-	if errOrder := h.orders.UpdateOrderStatus(r.Context(), payment.OrderID, orderStatus); errOrder != nil {
-		h.logger.ErrorContext(r.Context(), "update order status from webhook", "error", errOrder)
+	if err := h.orders.UpdateOrderStatus(r.Context(), payment.OrderID, orderStatus); err != nil {
+		h.logger.ErrorContext(r.Context(), "update order status from webhook", "error", err)
 	}
 
 	// Publish event.
@@ -227,7 +227,7 @@ func (h *Handler) publishPaymentEvent(r *http.Request, payment *domain.Payment, 
 		return
 	}
 
-	if errPub := h.publisher.Publish(r.Context(), eventType, payload); errPub != nil {
-		h.logger.WarnContext(r.Context(), "publish payment event", "error", errPub)
+	if err := h.publisher.Publish(r.Context(), eventType, payload); err != nil {
+		h.logger.WarnContext(r.Context(), "publish payment event", "error", err)
 	}
 }

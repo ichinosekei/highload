@@ -78,10 +78,10 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// --- Initial sync for local development ---
 	if cfg.Env == "local" {
 		const syncLimit = 1000
-		restaurants, errSync := resRepo.List(ctx, syncLimit, 0)
-		if errSync == nil {
-			if err := searchRepo.Sync(ctx, restaurants); err != nil {
-				logger.WarnContext(ctx, "initial search sync failed", "error", err)
+		restaurants, errList := resRepo.List(ctx, syncLimit, 0)
+		if errList == nil {
+			if errSync := searchRepo.Sync(ctx, restaurants); errSync != nil {
+				logger.WarnContext(ctx, "initial search sync failed", "error", errSync)
 			} else {
 				logger.InfoContext(ctx, "initial search sync completed", "count", len(restaurants))
 			}
@@ -108,8 +108,8 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	serverErrors := make(chan error, 1)
 	go func() {
 		logger.InfoContext(ctx, "catalog service started", "port", cfg.Port)
-		if errServe := srv.ListenAndServe(); errServe != nil && errServe != http.ErrServerClosed {
-			serverErrors <- fmt.Errorf("server startup: %w", errServe)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrors <- fmt.Errorf("server startup: %w", err)
 		}
 	}()
 
@@ -122,8 +122,8 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer shutdownCancel()
 
-		if errShutdown := srv.Shutdown(shutdownCtx); errShutdown != nil {
-			return fmt.Errorf("force server shutdown: %w", errShutdown)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("force server shutdown: %w", err)
 		}
 
 		logger.InfoContext(context.Background(), "server stopped")

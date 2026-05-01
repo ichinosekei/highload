@@ -1,4 +1,4 @@
-package repository_test
+package integration_test
 
 import (
 	"context"
@@ -23,8 +23,6 @@ import (
 
 const testTimeout = 120 * time.Second
 
-// setupTestDB starts a PostgreSQL container via testcontainers-go,
-// creates the schema and seed data, and returns a connected [platform.PostgresDB].
 func setupTestDB(t *testing.T) *platform.PostgresDB {
 	t.Helper()
 
@@ -35,7 +33,7 @@ func setupTestDB(t *testing.T) *platform.PostgresDB {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	t.Cleanup(cancel)
 
-	_, currentFile, _, _ := runtime.Caller(0) //nolint:dogsled // need only file path
+	_, currentFile, _, _ := runtime.Caller(0)
 	testdataDir := filepath.Join(filepath.Dir(currentFile), "testdata")
 
 	pgContainer, errContainer := postgres.Run(ctx,
@@ -90,7 +88,7 @@ var (
 
 // --- OrderRepository Integration Tests ---
 
-func TestOrderRepository_Create(t *testing.T) {
+func TestIntegration_OrderRepository_Create(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewOrderRepository(db)
 	ctx := context.Background()
@@ -183,7 +181,7 @@ func TestOrderRepository_Create(t *testing.T) {
 	})
 }
 
-func TestOrderRepository_GetByID(t *testing.T) {
+func TestIntegration_OrderRepository_GetByID(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewOrderRepository(db)
 	ctx := context.Background()
@@ -219,7 +217,7 @@ func TestOrderRepository_GetByID(t *testing.T) {
 	})
 }
 
-func TestOrderRepository_GetByIdempotencyKey(t *testing.T) {
+func TestIntegration_OrderRepository_GetByIdempotencyKey(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewOrderRepository(db)
 	ctx := context.Background()
@@ -245,7 +243,7 @@ func TestOrderRepository_GetByIdempotencyKey(t *testing.T) {
 	})
 }
 
-func TestOrderRepository_UpdateStatus(t *testing.T) {
+func TestIntegration_OrderRepository_UpdateStatus(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewOrderRepository(db)
 	ctx := context.Background()

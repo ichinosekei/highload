@@ -9,7 +9,6 @@ import (
 	"github.com/ichinosekei/highload/services/payment/internal/domain"
 )
 
-// MockPSPClient is a mock implementation of the PSP (payment service provider) for PoC.
 type MockPSPClient struct{}
 
 func NewMockPSPClient() *MockPSPClient {

@@ -15,8 +15,8 @@ func MustNewMeili(ctx context.Context, cfg *config.Config, logger *slog.Logger) 
 		panic(fmt.Sprintf("meilisearch connection failed: %v", err))
 	}
 
-	if errInit := meiliClient.InitIndices(ctx); errInit != nil {
-		logger.WarnContext(ctx, "meilisearch indices initialization", "error", errInit)
+	if err := meiliClient.InitIndices(ctx); err != nil {
+		logger.WarnContext(ctx, "meilisearch indices initialization", "error", err)
 	}
 
 	logger.InfoContext(ctx, "meilisearch connection established")

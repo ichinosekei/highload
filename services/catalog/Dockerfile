@@ -2,17 +2,17 @@ FROM golang:alpine AS builder
 
 WORKDIR /app
 
-# Копируем go.mod и go.sum из корня
+# Copy go.mod and go.sum from root
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Копируем общий internal код
+# Copy shared internal code
 COPY internal/ ./internal/
 
-# Копируем код сервиса
+# Copy service code
 COPY services/catalog/ ./services/catalog/
 
-# Собираем сервис
+# Build service
 RUN go build -o catalog ./services/catalog/cmd/main.go
 
 FROM alpine:latest

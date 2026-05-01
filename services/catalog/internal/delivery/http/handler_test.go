@@ -1,7 +1,6 @@
 package http_test
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -14,54 +13,17 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ichinosekei/highload/services/catalog/internal/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	catalog_http "github.com/ichinosekei/highload/services/catalog/internal/delivery/http"
 )
-
-// --- Mock implementations ---
-
-type mockRestaurantReader struct {
-	listFn    func(ctx context.Context, limit, offset int64) ([]domain.Restaurant, error)
-	getByIDFn func(ctx context.Context, id uuid.UUID) (*domain.Restaurant, error)
-}
-
-func (m *mockRestaurantReader) List(ctx context.Context, limit, offset int64) ([]domain.Restaurant, error) {
-	return m.listFn(ctx, limit, offset)
-}
-
-func (m *mockRestaurantReader) GetByID(ctx context.Context, id uuid.UUID) (*domain.Restaurant, error) {
-	return m.getByIDFn(ctx, id)
-}
-
-type mockMenuReader struct {
-	listByRestaurantFn func(ctx context.Context, restaurantID uuid.UUID) ([]domain.MenuItem, error)
-}
-
-func (m *mockMenuReader) ListByRestaurant(
-	ctx context.Context,
-	restaurantID uuid.UUID,
-) ([]domain.MenuItem, error) {
-	return m.listByRestaurantFn(ctx, restaurantID)
-}
-
-type mockMenuRestaurantReader struct {
-	*mockMenuReader
-	*mockRestaurantReader
-}
-
-type mockSearcher struct {
-	searchFn func(ctx context.Context, params domain.SearchParams) (*domain.SearchResult, error)
-}
-
-func (m *mockSearcher) Search(ctx context.Context, params domain.SearchParams) (*domain.SearchResult, error) {
-	return m.searchFn(ctx, params)
-}
 
 func newTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// setupRouter creates a chi router with the handler mounted at /api/v1.
 func setupRouter(h *catalog_http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Route("/api/v1", h.RegisterRoutes)
@@ -120,18 +82,18 @@ func TestListRestaurants_OK(t *testing.T) {
 	t.Parallel()
 
 	restaurants := []domain.Restaurant{testRestaurant}
+	mockReader := new(domain.MockRestaurantReader)
+	mockSearcher := new(domain.MockRestaurantSearcher)
+
+	mockReader.
+		On("List", mock.Anything, int64(20), int64(0)).
+		Return(restaurants, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				listFn: func(_ context.Context, limit, offset int64) ([]domain.Restaurant, error) {
-					if limit != 20 || offset != 0 {
-						t.Errorf("unexpected pagination: limit=%d, offset=%d", limit, offset)
-					}
-					return restaurants, nil
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
 		},
-		&mockSearcher{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -140,35 +102,33 @@ func TestListRestaurants_OK(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var got []domain.Restaurant
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	err := json.NewDecoder(w.Body).Decode(&got)
+	require.NoError(t, err)
 
-	if len(got) != 1 {
-		t.Fatalf("got %d restaurants; want 1", len(got))
-	}
-	if got[0].Name != "Pizza House" {
-		t.Errorf("got name %q; want %q", got[0].Name, "Pizza House")
-	}
+	assert.Len(t, got, 1)
+	assert.Equal(t, "Pizza House", got[0].Name)
+
+	mockReader.AssertExpectations(t)
 }
 
 func TestListRestaurants_EmptyResult(t *testing.T) {
 	t.Parallel()
 
+	mockReader := new(domain.MockRestaurantReader)
+	mockSearcher := new(domain.MockRestaurantSearcher)
+
+	mockReader.
+		On("List", mock.Anything, mock.Anything, mock.Anything).
+		Return([]domain.Restaurant{}, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
-					return nil, nil
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
 		},
-		&mockSearcher{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -177,31 +137,25 @@ func TestListRestaurants_EmptyResult(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
-
-	body := w.Body.String()
-	if body != "[]\n" {
-		t.Errorf("got body %q; want empty JSON array", body)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, "[]\n", w.Body.String())
 }
 
 func TestListRestaurants_CustomPagination(t *testing.T) {
 	t.Parallel()
 
-	var capturedLimit, capturedOffset int64
+	mockReader := new(domain.MockRestaurantReader)
+	mockSearcher := new(domain.MockRestaurantSearcher)
+
+	mockReader.
+		On("List", mock.Anything, int64(50), int64(10)).
+		Return([]domain.Restaurant{}, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				listFn: func(_ context.Context, limit, offset int64) ([]domain.Restaurant, error) {
-					capturedLimit = limit
-					capturedOffset = offset
-					return []domain.Restaurant{}, nil
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
 		},
-		&mockSearcher{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -210,23 +164,16 @@ func TestListRestaurants_CustomPagination(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
-	if capturedLimit != 50 {
-		t.Errorf("got limit %d; want 50", capturedLimit)
-	}
-	if capturedOffset != 10 {
-		t.Errorf("got offset %d; want 10", capturedOffset)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockReader.AssertExpectations(t)
 }
 
 func TestListRestaurants_LimitExceeded(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{},
+		&domain.MockMenuRestaurantReader{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -235,17 +182,15 @@ func TestListRestaurants_LimitExceeded(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusBadRequest)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestListRestaurants_InvalidLimit(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{},
+		&domain.MockMenuRestaurantReader{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -267,9 +212,7 @@ func TestListRestaurants_InvalidLimit(t *testing.T) {
 
 			setupRouter(h).ServeHTTP(w, req)
 
-			if w.Code != http.StatusBadRequest {
-				t.Errorf("got status %d; want %d for query %s", w.Code, http.StatusBadRequest, tt.query)
-			}
+			assert.Equal(t, http.StatusBadRequest, w.Code, "query: %s", tt.query)
 		})
 	}
 }
@@ -277,15 +220,18 @@ func TestListRestaurants_InvalidLimit(t *testing.T) {
 func TestListRestaurants_InternalError(t *testing.T) {
 	t.Parallel()
 
+	mockReader := new(domain.MockRestaurantReader)
+	mockSearcher := new(domain.MockRestaurantSearcher)
+
+	mockReader.
+		On("List", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, errTest)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
-					return nil, errTest
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
 		},
-		&mockSearcher{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -294,9 +240,7 @@ func TestListRestaurants_InternalError(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusInternalServerError)
-	}
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 // --- GetRestaurantMenu Tests ---
@@ -304,23 +248,22 @@ func TestListRestaurants_InternalError(t *testing.T) {
 func TestGetRestaurantMenu_OK(t *testing.T) {
 	t.Parallel()
 
+	mockReader := new(domain.MockRestaurantReader)
+	mockMenuReader := new(domain.MockMenuReader)
+
+	mockReader.
+		On("GetByID", mock.Anything, testRestaurantID).
+		Return(&testRestaurant, nil)
+	mockMenuReader.
+		On("ListByRestaurant", mock.Anything, testRestaurantID).
+		Return(testMenuItems, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				getByIDFn: func(_ context.Context, id uuid.UUID) (*domain.Restaurant, error) {
-					if id != testRestaurantID {
-						t.Errorf("got restaurant id %s; want %s", id, testRestaurantID)
-					}
-					return &testRestaurant, nil
-				},
-			},
-			mockMenuReader: &mockMenuReader{
-				listByRestaurantFn: func(_ context.Context, _ uuid.UUID) ([]domain.MenuItem, error) {
-					return testMenuItems, nil
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
+			MockMenuReader:       mockMenuReader,
 		},
-		&mockSearcher{},
+		new(domain.MockRestaurantSearcher),
 		newTestLogger(),
 	)
 
@@ -330,32 +273,25 @@ func TestGetRestaurantMenu_OK(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
 		Items      []domain.MenuItem `json:"items"`
 		Restaurant domain.Restaurant `json:"restaurant"`
 	}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
 
-	if resp.Restaurant.Name != "Pizza House" {
-		t.Errorf("got restaurant name %q; want %q", resp.Restaurant.Name, "Pizza House")
-	}
-	if len(resp.Items) != 2 {
-		t.Errorf("got %d menu items; want 2", len(resp.Items))
-	}
+	assert.Equal(t, "Pizza House", resp.Restaurant.Name)
+	assert.Len(t, resp.Items, 2)
 }
 
 func TestGetRestaurantMenu_InvalidID(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{},
+		&domain.MockMenuRestaurantReader{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -364,23 +300,22 @@ func TestGetRestaurantMenu_InvalidID(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusBadRequest)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestGetRestaurantMenu_NotFound(t *testing.T) {
 	t.Parallel()
 
+	mockReader := new(domain.MockRestaurantReader)
+	mockReader.
+		On("GetByID", mock.Anything, mock.Anything).
+		Return(nil, domain.ErrNotFound)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				getByIDFn: func(_ context.Context, _ uuid.UUID) (*domain.Restaurant, error) {
-					return nil, domain.ErrNotFound
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
 		},
-		&mockSearcher{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -391,28 +326,28 @@ func TestGetRestaurantMenu_NotFound(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusNotFound)
-	}
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestGetRestaurantMenu_EmptyMenu(t *testing.T) {
 	t.Parallel()
 
+	mockReader := new(domain.MockRestaurantReader)
+	mockMenuReader := new(domain.MockMenuReader)
+
+	mockReader.
+		On("GetByID", mock.Anything, mock.Anything).
+		Return(&testRestaurant, nil)
+	mockMenuReader.
+		On("ListByRestaurant", mock.Anything, mock.Anything).
+		Return([]domain.MenuItem{}, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				getByIDFn: func(_ context.Context, _ uuid.UUID) (*domain.Restaurant, error) {
-					return &testRestaurant, nil
-				},
-			},
-			mockMenuReader: &mockMenuReader{
-				listByRestaurantFn: func(_ context.Context, _ uuid.UUID) ([]domain.MenuItem, error) {
-					return nil, nil
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
+			MockMenuReader:       mockMenuReader,
 		},
-		&mockSearcher{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -422,19 +357,14 @@ func TestGetRestaurantMenu_EmptyMenu(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
 		Items []domain.MenuItem `json:"items"`
 	}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(resp.Items) != 0 {
-		t.Errorf("got %d items; want 0", len(resp.Items))
-	}
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Empty(t, resp.Items)
 }
 
 // --- Search Tests ---
@@ -442,22 +372,20 @@ func TestGetRestaurantMenu_EmptyMenu(t *testing.T) {
 func TestSearch_OK(t *testing.T) {
 	t.Parallel()
 
+	mockSearcher := new(domain.MockRestaurantSearcher)
+	mockSearcher.
+		On("Search", mock.Anything, domain.SearchParams{
+			Query: "пицца",
+			Limit: 20,
+		}).
+		Return(&domain.SearchResult{
+			Items: []domain.Restaurant{testRestaurant},
+			Total: 1,
+		}, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{
-			searchFn: func(_ context.Context, params domain.SearchParams) (*domain.SearchResult, error) {
-				if params.Query != "пицца" {
-					t.Errorf("got query %q; want %q", params.Query, "пицца")
-				}
-				if params.Limit != 20 {
-					t.Errorf("got limit %d; want 20", params.Limit)
-				}
-				return &domain.SearchResult{
-					Items: []domain.Restaurant{testRestaurant},
-					Total: 1,
-				}, nil
-			},
-		},
+		&domain.MockMenuRestaurantReader{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -466,38 +394,38 @@ func TestSearch_OK(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp domain.SearchResult
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
 
-	if resp.Total != 1 {
-		t.Errorf("got total %d; want 1", resp.Total)
-	}
-	if len(resp.Items) != 1 {
-		t.Errorf("got %d items; want 1", len(resp.Items))
-	}
+	assert.Equal(t, int64(1), resp.Total)
+	assert.Len(t, resp.Items, 1)
+	mockSearcher.AssertExpectations(t)
 }
 
 func TestSearch_WithCuisineAndSort(t *testing.T) {
 	t.Parallel()
 
-	var captured domain.SearchParams
+	mockSearcher := new(domain.MockRestaurantSearcher)
+	expectedParams := domain.SearchParams{
+		Query:   "pizza",
+		Cuisine: "italian",
+		Sort:    "rating",
+		Limit:   10,
+		Offset:  5,
+	}
+	mockSearcher.
+		On("Search", mock.Anything, expectedParams).
+		Return(&domain.SearchResult{
+			Items: []domain.Restaurant{},
+			Total: 0,
+		}, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{
-			searchFn: func(_ context.Context, params domain.SearchParams) (*domain.SearchResult, error) {
-				captured = params
-				return &domain.SearchResult{
-					Items: []domain.Restaurant{},
-					Total: 0,
-				}, nil
-			},
-		},
+		&domain.MockMenuRestaurantReader{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -507,30 +435,16 @@ func TestSearch_WithCuisineAndSort(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
-
-	if captured.Cuisine != "italian" {
-		t.Errorf("got cuisine %q; want %q", captured.Cuisine, "italian")
-	}
-	if captured.Sort != "rating" {
-		t.Errorf("got sort %q; want %q", captured.Sort, "rating")
-	}
-	if captured.Limit != 10 {
-		t.Errorf("got limit %d; want 10", captured.Limit)
-	}
-	if captured.Offset != 5 {
-		t.Errorf("got offset %d; want 5", captured.Offset)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockSearcher.AssertExpectations(t)
 }
 
 func TestSearch_InvalidSort(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{},
+		&domain.MockMenuRestaurantReader{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -539,17 +453,15 @@ func TestSearch_InvalidSort(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusBadRequest)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestSearch_LimitExceeded(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{},
+		&domain.MockMenuRestaurantReader{},
+		&domain.MockRestaurantSearcher{},
 		newTestLogger(),
 	)
 
@@ -558,21 +470,20 @@ func TestSearch_LimitExceeded(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusBadRequest)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestSearch_InternalError(t *testing.T) {
 	t.Parallel()
 
+	mockSearcher := new(domain.MockRestaurantSearcher)
+	mockSearcher.
+		On("Search", mock.Anything, mock.Anything).
+		Return(nil, errTest)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{},
-		&mockSearcher{
-			searchFn: func(_ context.Context, _ domain.SearchParams) (*domain.SearchResult, error) {
-				return nil, errTest
-			},
-		},
+		&domain.MockMenuRestaurantReader{},
+		mockSearcher,
 		newTestLogger(),
 	)
 
@@ -581,9 +492,7 @@ func TestSearch_InternalError(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusInternalServerError)
-	}
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 // --- Health Check ---
@@ -602,12 +511,8 @@ func TestHealthCheck(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("got status %d; want %d", w.Code, http.StatusOK)
-	}
-	if w.Body.String() != "OK" {
-		t.Errorf("got body %q; want %q", w.Body.String(), "OK")
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "OK", w.Body.String())
 }
 
 // --- JSON response format ---
@@ -615,15 +520,16 @@ func TestHealthCheck(t *testing.T) {
 func TestWriteJSON_ContentType(t *testing.T) {
 	t.Parallel()
 
+	mockReader := new(domain.MockRestaurantReader)
+	mockReader.
+		On("List", mock.Anything, mock.Anything, mock.Anything).
+		Return([]domain.Restaurant{}, nil)
+
 	h := catalog_http.NewHandler(
-		&mockMenuRestaurantReader{
-			mockRestaurantReader: &mockRestaurantReader{
-				listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
-					return []domain.Restaurant{}, nil
-				},
-			},
+		&domain.MockMenuRestaurantReader{
+			MockRestaurantReader: mockReader,
 		},
-		&mockSearcher{},
+		new(domain.MockRestaurantSearcher),
 		newTestLogger(),
 	)
 
@@ -632,8 +538,5 @@ func TestWriteJSON_ContentType(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	ct := w.Header().Get("Content-Type")
-	if ct != "application/json" {
-		t.Errorf("got Content-Type %q; want %q", ct, "application/json")
-	}
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 }
