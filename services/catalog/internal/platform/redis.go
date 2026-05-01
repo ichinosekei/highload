@@ -11,21 +11,10 @@ type RedisClient struct {
 	*redis.Client
 }
 
-func NewRedisClient(ctx context.Context, addr, password string) (*RedisClient, error) {
-	var opts *redis.Options
-	var err error
-
-	if len(addr) > 8 && addr[:8] == "redis://" {
-		opts, err = redis.ParseURL(addr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid redis url: %w", err)
-		}
-	} else {
-		opts = &redis.Options{
-			Addr:     addr,
-			Password: password,
-			DB:       0,
-		}
+func NewRedisClient(ctx context.Context, addr string) (*RedisClient, error) {
+	opts, err := redis.ParseURL(addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redis url: %w", err)
 	}
 
 	rdb := redis.NewClient(opts)

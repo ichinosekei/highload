@@ -10,15 +10,15 @@ import (
 	"github.com/ichinosekei/highload/services/catalog/internal/platform"
 )
 
-type MenuItemRepository struct {
+type MenuRepository struct {
 	db *platform.PostgresDB
 }
 
-func NewMenuItemRepository(db *platform.PostgresDB) *MenuItemRepository {
-	return &MenuItemRepository{db: db}
+func NewMenuRepository(db *platform.PostgresDB) *MenuRepository {
+	return &MenuRepository{db: db}
 }
 
-func (r *MenuItemRepository) ListByRestaurant(
+func (r *MenuRepository) ListByRestaurant(
 	ctx context.Context,
 	restaurantID uuid.UUID,
 ) ([]domain.MenuItem, error) {

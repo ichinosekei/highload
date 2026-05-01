@@ -78,7 +78,7 @@ run = "go test -v -short ./services/payment/..."
 alias = "utp"
 description = "Run unit tests for payment service (no Docker required)"
 
-# --- Integration tests (require Docker) ---
+# --- Unit + Integration tests (require Docker) ---
 [tasks.test-all]
 run = "go test -v -count=1 ./..."
 alias = "ta"
@@ -98,6 +98,32 @@ description = "Run all payment tests, including integration (Testcontainers)"
 run = "go test -v -count=1 ./services/catalog/..."
 alias = "tc"
 description = "Run all catalog tests, including integration (Testcontainers)"
+
+# --- Integration tests (require Docker) ---
+[tasks.itest-all]
+run = "go test -v -count=1 -run Integration ./..."
+alias = "ita"
+description = "Run integration tests for all services"
+
+[tasks.itest-catalog]
+run = "go test -v -count=1 -run Integration ./services/catalog/..."
+alias = "itc"
+description = "Run integration tests for catalog service"
+
+[tasks.itest-notification]
+run = "go test -v -count=1 -run Integration ./services/notification/..."
+alias = "itn"
+description = "Run integration tests for notification service"
+
+[tasks.itest-order]
+run = "go test -v -count=1 -run Integration ./services/order/..."
+alias = "ito"
+description = "Run integration tests for order service"
+
+[tasks.itest-payment]
+run = "go test -v -count=1 -run Integration ./services/payment/..."
+alias = "itp"
+description = "Run integration tests for payment service"
 
 # --- Infrastructure ---
 [tasks.up]

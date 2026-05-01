@@ -20,23 +20,20 @@ const (
 )
 
 type Handler struct {
-	restaurants domain.RestaurantReader
-	menuItems   domain.MenuItemReader
-	search      domain.RestaurantSearcher
-	logger      *slog.Logger
+	menuRes domain.MenuRestaurantReader
+	search  domain.RestaurantSearcher
+	logger  *slog.Logger
 }
 
 func NewHandler(
-	restaurants domain.RestaurantReader,
-	menuItems domain.MenuItemReader,
+	menuRes domain.MenuRestaurantReader,
 	search domain.RestaurantSearcher,
 	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
-		restaurants: restaurants,
-		menuItems:   menuItems,
-		search:      search,
-		logger:      logger,
+		menuRes: menuRes,
+		search:  search,
+		logger:  logger,
 	}
 }
 
@@ -47,9 +44,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/search", h.Search)
 }
 
-// writeJSON — хелпер для единообразной отправки JSON-ответа.
-// [json.NewEncoder] создаёт лёгкую обёртку вокруг [io.Writer],
-// переиспользовать его между запросами нельзя, т.к. у каждого запроса свой ResponseWriter.
+// writeJSON writes a JSON response.
 func (h *Handler) writeJSON(w http.ResponseWriter, r *http.Request, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -67,11 +62,12 @@ func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, status int,
 func (h *Handler) ListRestaurants(w http.ResponseWriter, r *http.Request) {
 	limit, offset, errParse := parsePagination(r)
 	if errParse != nil {
+		h.logger.DebugContext(r.Context(), "parse pagination", "error", errParse)
 		h.writeError(w, r, http.StatusBadRequest, errParse.Error())
 		return
 	}
 
-	restaurants, errList := h.restaurants.List(r.Context(), limit, offset)
+	restaurants, errList := h.menuRes.List(r.Context(), limit, offset)
 	if errList != nil {
 		h.logger.ErrorContext(r.Context(), "list restaurants", "error", errList)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")
@@ -95,7 +91,7 @@ func (h *Handler) GetRestaurantMenu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify restaurant exists.
-	restaurant, errGet := h.restaurants.GetByID(r.Context(), restaurantID)
+	restaurant, errGet := h.menuRes.GetByID(r.Context(), restaurantID)
 	if errGet != nil {
 		if errors.Is(errGet, domain.ErrNotFound) {
 			h.writeError(w, r, http.StatusNotFound, "restaurant not found")
@@ -106,7 +102,7 @@ func (h *Handler) GetRestaurantMenu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, errList := h.menuItems.ListByRestaurant(r.Context(), restaurantID)
+	items, errList := h.menuRes.ListByRestaurant(r.Context(), restaurantID)
 	if errList != nil {
 		h.logger.ErrorContext(r.Context(), "list menu items", "error", errList, "restaurant_id", restaurantID)
 		h.writeError(w, r, http.StatusInternalServerError, "internal server error")

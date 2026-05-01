@@ -44,7 +44,7 @@ func setupTestMeili(t *testing.T) *platform.MeiliClient {
 		t.Fatalf("create meilisearch client: %v", err)
 	}
 
-	if err := client.InitIndices(); err != nil {
+	if err := client.InitIndices(ctx); err != nil {
 		t.Fatalf("init meilisearch indices: %v", err)
 	}
 
@@ -52,6 +52,7 @@ func setupTestMeili(t *testing.T) *platform.MeiliClient {
 }
 
 func TestSearchRepository_Integration(t *testing.T) {
+	t.Parallel()
 	client := setupTestMeili(t)
 	repo := repository.NewSearchRepository(client)
 	ctx := context.Background()
@@ -86,6 +87,7 @@ func TestSearchRepository_Integration(t *testing.T) {
 	}
 
 	t.Run("search all active", func(t *testing.T) {
+		t.Parallel()
 		res, err := repo.Search(ctx, domain.SearchParams{Limit: 10})
 		if err != nil {
 			t.Fatalf("Search: %v", err)
@@ -97,6 +99,7 @@ func TestSearchRepository_Integration(t *testing.T) {
 	})
 
 	t.Run("search by query", func(t *testing.T) {
+		t.Parallel()
 		res, err := repo.Search(ctx, domain.SearchParams{Query: "pizza", Limit: 10})
 		if err != nil {
 			t.Fatalf("Search: %v", err)
@@ -108,6 +111,7 @@ func TestSearchRepository_Integration(t *testing.T) {
 	})
 
 	t.Run("search by cuisine", func(t *testing.T) {
+		t.Parallel()
 		res, err := repo.Search(ctx, domain.SearchParams{Cuisine: "american", Limit: 10})
 		if err != nil {
 			t.Fatalf("Search: %v", err)

@@ -56,35 +56,33 @@ func (d *SearchCacheDecorator) Search(ctx context.Context, params domain.SearchP
 
 // RestaurantCacheDecorator wraps restaurant and menu readers with Redis caching.
 type RestaurantCacheDecorator struct {
-	resReader  domain.RestaurantReader
-	menuReader domain.MenuItemReader
-	rdb        *platform.RedisClient
-	ttl        time.Duration
+	menuRestaurant domain.MenuRestaurantReader
+	rdb            *platform.RedisClient
+	ttl            time.Duration
 }
 
 func NewRestaurantCacheDecorator(
-	resReader domain.RestaurantReader,
-	menuReader domain.MenuItemReader,
+	menuRestaurant domain.MenuRestaurantReader,
 	rdb *platform.RedisClient,
 	ttl time.Duration,
 ) *RestaurantCacheDecorator {
 	return &RestaurantCacheDecorator{
-		resReader:  resReader,
-		menuReader: menuReader,
-		rdb:        rdb,
-		ttl:        ttl,
+		menuRestaurant: menuRestaurant,
+		rdb:            rdb,
+		ttl:            ttl,
 	}
 }
 
 func (d *RestaurantCacheDecorator) List(ctx context.Context, limit, offset int64) ([]domain.Restaurant, error) {
 	// Usually we don't cache lists with high cardinality or pagination unless necessary.
 	// For this PoC, we'll delegate to base reader.
-	return d.resReader.List(ctx, limit, offset)
+	return d.menuRestaurant.List(ctx, limit, offset)
 }
 
 func (d *RestaurantCacheDecorator) GetByID(ctx context.Context, id uuid.UUID) (*domain.Restaurant, error) {
 	key := fmt.Sprintf("catalog:restaurant:%s", id)
 
+	// Try cache
 	val, errGet := d.rdb.Get(ctx, key).Result()
 	if errGet == nil {
 		var res domain.Restaurant
@@ -93,7 +91,8 @@ func (d *RestaurantCacheDecorator) GetByID(ctx context.Context, id uuid.UUID) (*
 		}
 	}
 
-	res, errGetByID := d.resReader.GetByID(ctx, id)
+	// Fallback to base
+	res, errGetByID := d.menuRestaurant.GetByID(ctx, id)
 	if errGetByID != nil {
 		return nil, errGetByID
 	}
@@ -111,6 +110,7 @@ func (d *RestaurantCacheDecorator) ListByRestaurant(
 ) ([]domain.MenuItem, error) {
 	key := fmt.Sprintf("catalog:menu:%s", restaurantID)
 
+	// Try cache
 	val, errGet := d.rdb.Get(ctx, key).Result()
 	if errGet == nil {
 		var res []domain.MenuItem
@@ -119,7 +119,8 @@ func (d *RestaurantCacheDecorator) ListByRestaurant(
 		}
 	}
 
-	res, errList := d.menuReader.ListByRestaurant(ctx, restaurantID)
+	// Fallback to base
+	res, errList := d.menuRestaurant.ListByRestaurant(ctx, restaurantID)
 	if errList != nil {
 		return nil, errList
 	}
@@ -132,5 +133,5 @@ func (d *RestaurantCacheDecorator) ListByRestaurant(
 }
 
 func hashSearchParams(p domain.SearchParams) [32]byte {
-	return sha256.Sum256([]byte(fmt.Sprintf("%v", p)))
+	return sha256.Sum256(fmt.Appendf(nil, "%v", p))
 }

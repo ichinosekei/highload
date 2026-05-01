@@ -33,15 +33,20 @@ func (m *mockRestaurantReader) GetByID(ctx context.Context, id uuid.UUID) (*doma
 	return m.getByIDFn(ctx, id)
 }
 
-type mockMenuItemReader struct {
+type mockMenuReader struct {
 	listByRestaurantFn func(ctx context.Context, restaurantID uuid.UUID) ([]domain.MenuItem, error)
 }
 
-func (m *mockMenuItemReader) ListByRestaurant(
+func (m *mockMenuReader) ListByRestaurant(
 	ctx context.Context,
 	restaurantID uuid.UUID,
 ) ([]domain.MenuItem, error) {
 	return m.listByRestaurantFn(ctx, restaurantID)
+}
+
+type mockMenuRestaurantReader struct {
+	*mockMenuReader
+	*mockRestaurantReader
 }
 
 type mockSearcher struct {
@@ -116,15 +121,16 @@ func TestListRestaurants_OK(t *testing.T) {
 
 	restaurants := []domain.Restaurant{testRestaurant}
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			listFn: func(_ context.Context, limit, offset int64) ([]domain.Restaurant, error) {
-				if limit != 20 || offset != 0 {
-					t.Errorf("unexpected pagination: limit=%d, offset=%d", limit, offset)
-				}
-				return restaurants, nil
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				listFn: func(_ context.Context, limit, offset int64) ([]domain.Restaurant, error) {
+					if limit != 20 || offset != 0 {
+						t.Errorf("unexpected pagination: limit=%d, offset=%d", limit, offset)
+					}
+					return restaurants, nil
+				},
 			},
 		},
-		&mockMenuItemReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -155,12 +161,13 @@ func TestListRestaurants_EmptyResult(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
-				return nil, nil
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
+					return nil, nil
+				},
 			},
 		},
-		&mockMenuItemReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -185,14 +192,15 @@ func TestListRestaurants_CustomPagination(t *testing.T) {
 
 	var capturedLimit, capturedOffset int64
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			listFn: func(_ context.Context, limit, offset int64) ([]domain.Restaurant, error) {
-				capturedLimit = limit
-				capturedOffset = offset
-				return []domain.Restaurant{}, nil
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				listFn: func(_ context.Context, limit, offset int64) ([]domain.Restaurant, error) {
+					capturedLimit = limit
+					capturedOffset = offset
+					return []domain.Restaurant{}, nil
+				},
 			},
 		},
-		&mockMenuItemReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -217,8 +225,7 @@ func TestListRestaurants_LimitExceeded(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -237,8 +244,7 @@ func TestListRestaurants_InvalidLimit(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -272,12 +278,13 @@ func TestListRestaurants_InternalError(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
-				return nil, errTest
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
+					return nil, errTest
+				},
 			},
 		},
-		&mockMenuItemReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -298,17 +305,19 @@ func TestGetRestaurantMenu_OK(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			getByIDFn: func(_ context.Context, id uuid.UUID) (*domain.Restaurant, error) {
-				if id != testRestaurantID {
-					t.Errorf("got restaurant id %s; want %s", id, testRestaurantID)
-				}
-				return &testRestaurant, nil
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				getByIDFn: func(_ context.Context, id uuid.UUID) (*domain.Restaurant, error) {
+					if id != testRestaurantID {
+						t.Errorf("got restaurant id %s; want %s", id, testRestaurantID)
+					}
+					return &testRestaurant, nil
+				},
 			},
-		},
-		&mockMenuItemReader{
-			listByRestaurantFn: func(_ context.Context, _ uuid.UUID) ([]domain.MenuItem, error) {
-				return testMenuItems, nil
+			mockMenuReader: &mockMenuReader{
+				listByRestaurantFn: func(_ context.Context, _ uuid.UUID) ([]domain.MenuItem, error) {
+					return testMenuItems, nil
+				},
 			},
 		},
 		&mockSearcher{},
@@ -345,8 +354,7 @@ func TestGetRestaurantMenu_InvalidID(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -365,12 +373,13 @@ func TestGetRestaurantMenu_NotFound(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			getByIDFn: func(_ context.Context, _ uuid.UUID) (*domain.Restaurant, error) {
-				return nil, domain.ErrNotFound
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				getByIDFn: func(_ context.Context, _ uuid.UUID) (*domain.Restaurant, error) {
+					return nil, domain.ErrNotFound
+				},
 			},
 		},
-		&mockMenuItemReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -391,14 +400,16 @@ func TestGetRestaurantMenu_EmptyMenu(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			getByIDFn: func(_ context.Context, _ uuid.UUID) (*domain.Restaurant, error) {
-				return &testRestaurant, nil
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				getByIDFn: func(_ context.Context, _ uuid.UUID) (*domain.Restaurant, error) {
+					return &testRestaurant, nil
+				},
 			},
-		},
-		&mockMenuItemReader{
-			listByRestaurantFn: func(_ context.Context, _ uuid.UUID) ([]domain.MenuItem, error) {
-				return nil, nil
+			mockMenuReader: &mockMenuReader{
+				listByRestaurantFn: func(_ context.Context, _ uuid.UUID) ([]domain.MenuItem, error) {
+					return nil, nil
+				},
 			},
 		},
 		&mockSearcher{},
@@ -432,8 +443,7 @@ func TestSearch_OK(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{
 			searchFn: func(_ context.Context, params domain.SearchParams) (*domain.SearchResult, error) {
 				if params.Query != "пицца" {
@@ -478,8 +488,7 @@ func TestSearch_WithCuisineAndSort(t *testing.T) {
 
 	var captured domain.SearchParams
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{
 			searchFn: func(_ context.Context, params domain.SearchParams) (*domain.SearchResult, error) {
 				captured = params
@@ -520,8 +529,7 @@ func TestSearch_InvalidSort(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -540,8 +548,7 @@ func TestSearch_LimitExceeded(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)
@@ -560,8 +567,7 @@ func TestSearch_InternalError(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{},
-		&mockMenuItemReader{},
+		&mockMenuRestaurantReader{},
 		&mockSearcher{
 			searchFn: func(_ context.Context, _ domain.SearchParams) (*domain.SearchResult, error) {
 				return nil, errTest
@@ -610,12 +616,13 @@ func TestWriteJSON_ContentType(t *testing.T) {
 	t.Parallel()
 
 	h := catalog_http.NewHandler(
-		&mockRestaurantReader{
-			listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
-				return []domain.Restaurant{}, nil
+		&mockMenuRestaurantReader{
+			mockRestaurantReader: &mockRestaurantReader{
+				listFn: func(_ context.Context, _, _ int64) ([]domain.Restaurant, error) {
+					return []domain.Restaurant{}, nil
+				},
 			},
 		},
-		&mockMenuItemReader{},
 		&mockSearcher{},
 		newTestLogger(),
 	)

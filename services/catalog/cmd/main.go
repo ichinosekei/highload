@@ -14,7 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	core_logger "github.com/ichinosekei/highload/internal/logger"
+	shared_handler "github.com/ichinosekei/highload/internal/delivery/http"
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	"github.com/ichinosekei/highload/services/catalog/internal/app"
 	"github.com/ichinosekei/highload/services/catalog/internal/config"
 	catalog_http "github.com/ichinosekei/highload/services/catalog/internal/delivery/http"
@@ -33,7 +34,7 @@ func main() {
 		panic(fmt.Sprintf("failed to initialize configuration: %v", err))
 	}
 
-	logger := core_logger.NewLogger(cfg.Env, "catalog")
+	logger := shared_logger.NewLogger(cfg.Env, "catalog")
 
 	if err := run(&cfg, logger); err != nil {
 		logger.Error("application startup", "error", err)
@@ -45,7 +46,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// --- Инициализация компонентов ---
+	// --- Infra initialization ---
 	db := app.MustNewPostgres(ctx, cfg, logger)
 	defer db.Close()
 
@@ -55,19 +56,26 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	rdb := app.MustNewRedis(ctx, cfg, logger)
 	defer rdb.Close()
 
-	// --- Репозитории ---
+	// --- Repositories ---
 	resRepo := repository.NewRestaurantRepository(db)
-	menuRepo := repository.NewMenuItemRepository(db)
+	menuRepo := repository.NewMenuRepository(db)
 	searchRepo := repository.NewSearchRepository(meiliClient)
 
 	// --- Caching Decorators ---
 	cachedSearchRepo := repository.NewSearchCacheDecorator(searchRepo, rdb, cfg.CacheTTLSearch)
-	cachedResRepo := repository.NewRestaurantCacheDecorator(resRepo, menuRepo, rdb, cfg.CacheTTLMenu)
+	cachedMenuResRepo := repository.NewRestaurantCacheDecorator(
+		repository.MenuRestaurantComposite{
+			RestaurantReader: resRepo,
+			MenuReader:       menuRepo,
+		},
+		rdb,
+		cfg.CacheTTLMenu,
+	)
 
-	// --- Обработчики ---
-	h := catalog_http.NewHandler(cachedResRepo, cachedResRepo, cachedSearchRepo, logger)
+	// --- Handlers ---
+	h := catalog_http.NewHandler(cachedMenuResRepo, cachedSearchRepo, logger)
 
-	// --- Начальная синхронизация поиска (для разработки) ---
+	// --- Initial sync for local development ---
 	if cfg.Env == "local" {
 		const syncLimit = 1000
 		restaurants, errSync := resRepo.List(ctx, syncLimit, 0)
@@ -80,20 +88,17 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		}
 	}
 
-	// --- Роутер ---
+	// --- Router ---
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(serverTimeout))
 
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
+	r.Get("/health", shared_handler.HealthCheck)
 
 	r.Route("/api/v1", h.RegisterRoutes)
 
-	// --- Запуск сервера ---
+	// --- Server start ---
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           r,

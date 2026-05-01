@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -23,9 +22,6 @@ import (
 
 const testTimeout = 120 * time.Second
 
-// setupTestDB starts a PostgreSQL container via testcontainers-go,
-// creates the schema and seed data, and returns a connected [platform.PostgresDB].
-// The container is automatically terminated when the test completes.
 func setupTestDB(t *testing.T) *platform.PostgresDB {
 	t.Helper()
 
@@ -36,10 +32,10 @@ func setupTestDB(t *testing.T) *platform.PostgresDB {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	t.Cleanup(cancel)
 
-	_, currentFile, _, _ := runtime.Caller(0) //nolint:dogsled // need only file path
-	testdataDir := filepath.Join(filepath.Dir(currentFile), "testdata")
+	_, currentFile, _, _ := runtime.Caller(0)
+	testdataDir := filepath.Join(filepath.Dir(filepath.Dir(currentFile)), "testdata")
 
-	pgContainer, errContainer := postgres.Run(ctx,
+	pgContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
 		postgres.WithDatabase("catalog_test"),
 		postgres.WithUsername("test_user"),
@@ -54,28 +50,28 @@ func setupTestDB(t *testing.T) *platform.PostgresDB {
 				WithOccurrence(2).
 				WithStartupTimeout(30*time.Second)),
 	)
-	if errContainer != nil {
-		t.Fatalf("start postgres container: %v", errContainer)
+	if err != nil {
+		t.Fatalf("start postgres container: %v", err)
 	}
 
 	t.Cleanup(func() {
-		if errTerminate := testcontainers.TerminateContainer(pgContainer); errTerminate != nil {
-			t.Logf("terminate postgres container: %v", errTerminate)
+		if errTerm := testcontainers.TerminateContainer(pgContainer); errTerm != nil {
+			t.Logf("terminate postgres container: %v", errTerm)
 		}
 	})
 
-	connStr, errConn := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if errConn != nil {
-		t.Fatalf("get connection string: %v", errConn)
+	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatalf("get connection string: %v", err)
 	}
 
-	pool, errPool := pgxpool.New(ctx, connStr)
-	if errPool != nil {
-		t.Fatalf("connect to test database: %v", errPool)
+	db, err := platform.NewPostgresDB(ctx, connStr)
+	if err != nil {
+		t.Fatalf("create postgres client: %v", err)
 	}
-	t.Cleanup(pool.Close)
+	t.Cleanup(db.Close)
 
-	return &platform.PostgresDB{Pool: pool}
+	return db
 }
 
 // --- Test Data IDs ---
@@ -92,11 +88,13 @@ var (
 
 //nolint:gocognit // complex integration test with many assertions
 func TestRestaurantRepository_List(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	repo := repository.NewRestaurantRepository(db)
 	ctx := context.Background()
 
 	t.Run("returns only active restaurants", func(t *testing.T) {
+		t.Parallel()
 		restaurants, err := repo.List(ctx, 100, 0)
 		if err != nil {
 			t.Fatalf("List: %v", err)
@@ -115,6 +113,7 @@ func TestRestaurantRepository_List(t *testing.T) {
 	})
 
 	t.Run("ordered by rating DESC", func(t *testing.T) {
+		t.Parallel()
 		restaurants, err := repo.List(ctx, 100, 0)
 		if err != nil {
 			t.Fatalf("List: %v", err)
@@ -129,6 +128,7 @@ func TestRestaurantRepository_List(t *testing.T) {
 	})
 
 	t.Run("respects pagination limit", func(t *testing.T) {
+		t.Parallel()
 		restaurants, err := repo.List(ctx, 1, 0)
 		if err != nil {
 			t.Fatalf("List: %v", err)
@@ -140,14 +140,15 @@ func TestRestaurantRepository_List(t *testing.T) {
 	})
 
 	t.Run("respects pagination offset", func(t *testing.T) {
-		allRestaurants, errAll := repo.List(ctx, 100, 0)
-		if errAll != nil {
-			t.Fatalf("List all: %v", errAll)
+		t.Parallel()
+		allRestaurants, err := repo.List(ctx, 100, 0)
+		if err != nil {
+			t.Fatalf("List all: %v", err)
 		}
 
-		offsetRestaurants, errOffset := repo.List(ctx, 100, 1)
-		if errOffset != nil {
-			t.Fatalf("List with offset: %v", errOffset)
+		offsetRestaurants, err := repo.List(ctx, 100, 1)
+		if err != nil {
+			t.Fatalf("List with offset: %v", err)
 		}
 
 		if len(offsetRestaurants) != len(allRestaurants)-1 {
@@ -157,6 +158,7 @@ func TestRestaurantRepository_List(t *testing.T) {
 	})
 
 	t.Run("scans all fields correctly", func(t *testing.T) {
+		t.Parallel()
 		restaurants, err := repo.List(ctx, 100, 0)
 		if err != nil {
 			t.Fatalf("List: %v", err)
@@ -201,11 +203,13 @@ func TestRestaurantRepository_List(t *testing.T) {
 }
 
 func TestRestaurantRepository_GetByID(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	repo := repository.NewRestaurantRepository(db)
 	ctx := context.Background()
 
 	t.Run("returns existing restaurant", func(t *testing.T) {
+		t.Parallel()
 		restaurant, err := repo.GetByID(ctx, pizzaHouseID)
 		if err != nil {
 			t.Fatalf("GetByID: %v", err)
@@ -220,6 +224,7 @@ func TestRestaurantRepository_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns not found for non-existent ID", func(t *testing.T) {
+		t.Parallel()
 		_, err := repo.GetByID(ctx, uuid.New())
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -230,6 +235,7 @@ func TestRestaurantRepository_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns inactive restaurant by ID", func(t *testing.T) {
+		t.Parallel()
 		restaurant, err := repo.GetByID(ctx, closedRestID)
 		if err != nil {
 			t.Fatalf("GetByID: %v", err)
@@ -240,15 +246,17 @@ func TestRestaurantRepository_GetByID(t *testing.T) {
 	})
 }
 
-// --- MenuItemRepository Integration Tests ---
+// --- MenuRepository Integration Tests ---
 
 //nolint:gocognit // complex integration test with many assertions
-func TestMenuItemRepository_ListByRestaurant(t *testing.T) {
+func TestMenuRepository_ListByRestaurant(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
-	repo := repository.NewMenuItemRepository(db)
+	repo := repository.NewMenuRepository(db)
 	ctx := context.Background()
 
 	t.Run("returns only available items for restaurant", func(t *testing.T) {
+		t.Parallel()
 		items, err := repo.ListByRestaurant(ctx, pizzaHouseID)
 		if err != nil {
 			t.Fatalf("ListByRestaurant: %v", err)
@@ -270,6 +278,7 @@ func TestMenuItemRepository_ListByRestaurant(t *testing.T) {
 	})
 
 	t.Run("returns items for restaurant with menu", func(t *testing.T) {
+		t.Parallel()
 		items, err := repo.ListByRestaurant(ctx, sushiMasterID)
 		if err != nil {
 			t.Fatalf("ListByRestaurant: %v", err)
@@ -282,6 +291,7 @@ func TestMenuItemRepository_ListByRestaurant(t *testing.T) {
 	})
 
 	t.Run("returns empty for non-existent restaurant", func(t *testing.T) {
+		t.Parallel()
 		items, err := repo.ListByRestaurant(ctx, uuid.New())
 		if err != nil {
 			t.Fatalf("ListByRestaurant: %v", err)
@@ -292,6 +302,7 @@ func TestMenuItemRepository_ListByRestaurant(t *testing.T) {
 	})
 
 	t.Run("scans all fields correctly", func(t *testing.T) {
+		t.Parallel()
 		items, err := repo.ListByRestaurant(ctx, pizzaHouseID)
 		if err != nil {
 			t.Fatalf("ListByRestaurant: %v", err)
@@ -333,6 +344,7 @@ func TestMenuItemRepository_ListByRestaurant(t *testing.T) {
 	})
 
 	t.Run("ordered by category then name", func(t *testing.T) {
+		t.Parallel()
 		items, err := repo.ListByRestaurant(ctx, pizzaHouseID)
 		if err != nil {
 			t.Fatalf("ListByRestaurant: %v", err)
