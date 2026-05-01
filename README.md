@@ -100,18 +100,52 @@ docker compose -f docker-compose.yaml -f docker-compose.scaled.yaml up -d
 
 ### Линтер
 Все сервисы проходят проверку `golangci-lint` с [единой конфигурацией](.golangci.yml):
+
+**Вариант А (mise):**
 ```bash
-mise run lint        # или: golangci-lint run ./...
+mise run la
+```
+
+**Вариант B (golangci-lint):**
+```bash
+golangci-lint run ./...
 ```
 
 ### Unit-тесты
 Юнит-тесты с использованием `testify/mock` для всех доменных слоёв:
+
+**Вариант А (mise):**
 ```bash
-mise run test        # или: go test ./services/*/...
+mise run uta
+```
+
+**Вариант B (go test):**
+```bash
+go test -v -short ./...
 ```
 
 ### Интеграционные тесты
 Интеграционные тесты с использованием `testcontainers-go` (Postgres, Redis, Meilisearch):
+
+**Вариант А (mise):**
 ```bash
-mise run test-integration  # или: go test -tags=integration ./services/*/internal/integration/...
+mise run ita
+```
+
+**Вариант B (go test):**
+```bash
+go test -v -count=1 -run Integration ./...
+```
+
+### Unit + Интеграционные
+Запуск всех тестов для всех сервисов:
+
+**Вариант А (mise):**
+```bash
+mise run ta
+```
+
+**Вариант B (go test):**
+```bash
+go test -v -count=1 ./...
 ```
