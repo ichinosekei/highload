@@ -1,0 +1,93 @@
+package integration_test
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	nats_mod "github.com/testcontainers/testcontainers-go/modules/nats"
+
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
+	"github.com/ichinosekei/highload/services/notification/internal/delivery/nats"
+	"github.com/ichinosekei/highload/services/notification/internal/domain"
+	"github.com/ichinosekei/highload/services/notification/internal/platform"
+)
+
+const testTimeout = 60 * time.Second
+
+func TestConsumer_Integration(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	// 1. Start NATS container
+	natsContainer, err := nats_mod.Run(ctx, "nats:2.10-alpine",
+		testcontainers.WithCmd("-js"),
+	)
+	require.NoError(t, err)
+	defer func() {
+		_ = natsContainer.Terminate(context.Background())
+	}()
+
+	natsURL, err := natsContainer.ConnectionString(ctx)
+	require.NoError(t, err)
+
+	// 2. Initialize NatsClient
+	natsClient, err := platform.NewNatsClient(natsURL)
+	require.NoError(t, err)
+	defer natsClient.Close()
+
+	// Ensure stream
+	err = natsClient.EnsureStream(ctx, "NOTIFICATIONS", []string{"order.*", "payment.*"})
+	require.NoError(t, err)
+
+	// 3. Initialize Service and Consumer
+	mockService := new(domain.MockNotificationService)
+	logger := shared_logger.NewLogger("test", "test")
+	consumer := nats.NewConsumer(natsClient, mockService, logger)
+
+	err = consumer.Start(ctx)
+	require.NoError(t, err)
+
+	// 4. Test order.created event
+	orderID := uuid.New()
+	userID := uuid.New()
+	payload := domain.OrderCreatedPayload{
+		OrderID: orderID,
+		UserID:  userID,
+		Total:   1000,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	// Expect service call
+	done := make(chan bool, 1)
+	mockService.
+		On("ProcessOrderCreated", mock.Anything, payload).
+		Return(nil).
+		Run(func(_ mock.Arguments) {
+			done <- true
+		})
+
+	// Publish message
+	_, err = natsClient.JS.Publish(ctx, domain.EventOrderCreated, payloadBytes)
+	require.NoError(t, err)
+
+	// Wait for processing
+	select {
+	case <-done:
+		// Success
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for message processing")
+	}
+
+	mockService.AssertExpectations(t)
+}

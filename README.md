@@ -1,27 +1,117 @@
-# Highload Food Delivery Service
+# Highload Food Delivery Service PoC
 
-Проект по разработке архитектуры высоконагруженного сервиса доставки еды (Россия + СНГ) с аудиторией 5–20 млн MAU.
+Прототип высоконагруженного ядра сервиса доставки еды с реализацией паттернов отказоустойчивости.
 
-## 📚 Документация
+---
 
-Вся проектная документация разделена на ключевые разделы:
+## 🚀 Быстрый старт
 
-*   **[Требования к системе](docs/requirements.md)** — контекст, ФТ/НФТ, оценка нагрузки (Capacity Estimation) и Latency Budget.
-*   **[Архитектура системы](docs/architecture.md)** — описание выбранного стиля (SBA), C4 диаграммы, API Design и модель данных.
-*   **[Architectural Decision Records (ADR)](docs/adr/)** — реестр принятых архитектурных решений.
-*   **[Оптимизация ресурсов (ADR-004)](docs/adr/004-resource-optimization.md)** — стратегия работы в условиях 2 vCPU / 8 GB RAM.
+### 1. Запуск системы
+Поднимите весь стек (микросервисы + инфраструктура) одной командой:
+```bash
+docker compose up -d
+```
 
-## 🏗 Ключевые архитектурные решения
+#### Проверка доступности (Health Checks)
+*   **API Gateway (Traefik)**: `curl -i http://localhost/ping`
+*   **Catalog**: `curl -i http://localhost/api/v1/catalog/health`
+*   **Order**: `curl -i http://localhost/api/v1/orders/health`
+*   **Payment**: `curl -i http://localhost/api/v1/payments/health`
+*   **Notification**: `curl -i http://localhost/api/v1/notifications/health`
 
-*   **Стиль:** Service-Based Architecture (SBA) с элементами Event-Driven.
-*   **Базы данных:** Polyglot Persistence (PostgreSQL для ACID, Meilisearch для поиска, Redis для кэша и корзин).
-*   **Надежность:** Паттерн Transactional Outbox + NATS JetStream для гарантии доставки событий.
-*   **Оптимизация:** Замена тяжелых JVM-компонентов на нативные (Go/Rust) аналоги для работы на лимитированных ресурсах.
+---
 
-## 🛠 Технологический стек
+## 🔍 Ручная проверка API
 
-*   **Backend:** Go
-*   **Databases:** PostgreSQL 18, Meilisearch, Redis 7
-*   **Messaging:** NATS JetStream
-*   **API Gateway:** Traefik OSS
-*   **Infrastructure:** Cloud-based (VM: 2 vCPU, 8 GB RAM) + CDN для статики
+### 1. Поиск ресторанов
+```bash
+curl -X GET "http://localhost/api/v1/search?q=pizza&cuisine=Italian&limit=5"
+```
+*   **Ожидается**: `200 OK` и JSON со списком ресторанов (Meilisearch).
+
+### 2. Получение меню ресторана
+```bash
+curl -X GET "http://localhost/api/v1/catalog/restaurants/0196ca5b-8fd3-7c09-b2f4-a4f3b6c8d901/menu"
+```
+*   **Ожидается**: `200 OK` и JSON с деталями ресторана и списком блюд.
+
+### 3. Создание заказа
+```bash
+curl -i -X POST http://localhost/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 12345678-1234-1234-1234-1234567890ab" \
+  -d '{
+    "restaurant_id": "0196ca5b-8fd3-7c09-b2f4-a4f3b6c8d901",
+    "items": [{"menu_item_id": "0196ca5b-8fd3-7c09-b2f4-b4f3b6c8d001", "quantity": 2}],
+    "delivery_address": {"lat": 55.75, "lon": 37.62, "address_text": "ул. Тестовая, 1"}
+  }'
+```
+*   **Ожидается**: `201 Created` и JSON с данными созданного заказа.
+*   *Примечание*: При повторном вызове с тем же ключом идемпотентности вернется тот же заказ.
+
+---
+
+## 📈 Нагрузочное тестирование
+
+Мы используем **k6** для проверки системы под нагрузкой (100 RPS read / 30 RPS write).
+
+### Запуск замера Baseline (Iteration 0):
+
+**Вариант А (mise):**
+```bash
+mise run measure-baseline
+```
+
+**Вариант Б (Docker):**
+```bash
+docker run --rm -i --network=host grafana/k6 run - <k6/stress.js
+```
+
+👉 **[Подробный лог оптимизации и результаты тестов (docs/optimization-log.md)](docs/optimization-log.md)**
+
+---
+
+## 🏗 Архитектура и Масштабирование
+
+В проекте реализовано 8 ключевых паттернов устойчивости и проектирования.
+👉 **[Подробное обоснование паттернов со ссылками на код (docs/architecture-patterns.md)](docs/architecture-patterns.md)**
+
+### Горизонтальное масштабирование (Scale x2)
+Для запуска системы с несколькими репликами сервисов (2 реплики для Catalog и Order) выполните:
+
+**Вариант А (mise):**
+```bash
+mise run scale
+```
+
+**Вариант Б (Docker):**
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.scaled.yaml up -d
+```
+
+### Ресурсы
+Лимиты ресурсов строго ограничены в `docker-compose.yaml` (суммарно под 2 vCPU / 8 GB RAM), что соответствует требованиям к развертыванию на VM.
+
+---
+
+## ✅ Качество кода (бонус)
+
+Помимо основных требований, в проекте реализованы практики обеспечения качества:
+
+### Линтер
+Все сервисы проходят проверку `golangci-lint` с [единой конфигурацией](.golangci.yml):
+```bash
+mise run lint        # или: golangci-lint run ./...
+```
+
+### Unit-тесты
+Юнит-тесты с использованием `testify/mock` для всех доменных слоёв:
+```bash
+mise run test        # или: go test ./services/*/...
+```
+
+### Интеграционные тесты
+Интеграционные тесты с использованием `testcontainers-go` (Postgres, Redis, Meilisearch):
+```bash
+mise run test-integration  # или: go test -tags=integration ./services/*/internal/integration/...
+```
