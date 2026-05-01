@@ -13,7 +13,7 @@ docker compose up -d
 ```
 
 #### Проверка доступности (Health Checks)
-*   **API Gateway (Traefik)**: `curl -i http://localhost/ping`
+*   **API Gateway (Traefik)**: `curl -i http://localhost:8084/ping`
 *   **Catalog**: `curl -i http://localhost/api/v1/catalog/health`
 *   **Order**: `curl -i http://localhost/api/v1/orders/health`
 *   **Payment**: `curl -i http://localhost/api/v1/payments/health`
