@@ -10,7 +10,8 @@ import (
 )
 
 func MustNewRedis(ctx context.Context, cfg *config.Config, logger *slog.Logger) *platform.RedisClient {
-	rdb, err := platform.NewRedisClient(ctx, cfg.RedisAddr)
+	logger.InfoContext(ctx, "connecting to redis", "addr", cfg.RedisAddr)
+	rdb, err := platform.NewRedisClient(ctx, cfg.RedisAddr, cfg.RedisPassword)
 	if err != nil {
 		panic(fmt.Sprintf("redis connection failed: %v", err))
 	}

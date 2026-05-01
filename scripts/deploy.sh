@@ -4,25 +4,20 @@
 # Использование:
 #   ./scripts/deploy.sh user@host              # Деплой с параметрами по умолчанию
 #   ./scripts/deploy.sh user@host /opt/app     # Указание пути на сервере
-#
-# Требования:
-#   - Docker на локальной машине
-#   - SSH-доступ к удалённому серверу
-#   - Docker + Docker Compose на удалённом сервере
 
 set -euo pipefail
 
 # --- Configuration ---
 REMOTE_HOST="${1:?Usage: $0 user@host [remote_path]}"
-REMOTE_PATH="${2:-/opt/highload}"
+REMOTE_PATH="${2:-highload}"
 IMAGES=(
-  "food-catalog"
-  "food-order"
-  "food-payment"
-  "food-notification"
+  "highload-catalog"
+  "highload-order"
+  "highload-payment"
+  "highload-notification"
 )
 ARCHIVE_NAME="highload-images.tar.gz"
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -o IdentitiesOnly=yes"
 
 echo "============================================"
 echo "  Deploying to: ${REMOTE_HOST}:${REMOTE_PATH}"
@@ -48,6 +43,8 @@ scp ${SSH_OPTS} "${ARCHIVE_NAME}" "${REMOTE_HOST}:${REMOTE_PATH}/"
 
 scp ${SSH_OPTS} \
   docker-compose.yaml \
+  docker-compose.scaled.yaml \
+  traefik_dynamic.yaml \
   "${REMOTE_HOST}:${REMOTE_PATH}/"
 
 ssh ${SSH_OPTS} "${REMOTE_HOST}" "mkdir -p ${REMOTE_PATH}/deployments/postgres"

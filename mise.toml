@@ -38,7 +38,7 @@ alias = "c"
 description = "Run catalog service"
 
 [tasks.notification]
-run = "go run services/notification/cmd/notification/main.go"
+run = "go run services/notification/cmd/main.go"
 alias = "n"
 description = "Run notification service"
 
@@ -133,6 +133,10 @@ description = "Start all services via Docker Compose"
 [tasks.down]
 run = "docker compose down"
 description = "Stop all services"
+
+[tasks.scale]
+run = "docker compose -f docker-compose.yaml -f docker-compose.scaled.yaml up -d"
+description = "Scale services"
 
 [tasks.deploy]
 run = "bash scripts/deploy.sh"

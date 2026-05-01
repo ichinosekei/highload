@@ -81,7 +81,7 @@ docker run --rm -i --network=host grafana/k6 run - <k6/stress.js
 ### Горизонтальное масштабирование (Scale x2)
 Для запуска системы с несколькими репликами сервисов (2 реплики для Catalog и Order) выполните:
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.scaled.yml up -d
+docker compose -f docker-compose.yaml -f docker-compose.scaled.yaml up -d
 ```
 
 ### Ресурсы

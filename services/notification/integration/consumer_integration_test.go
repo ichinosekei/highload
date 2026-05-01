@@ -30,7 +30,9 @@ func TestConsumer_Integration(t *testing.T) {
 	defer cancel()
 
 	// 1. Start NATS container
-	natsContainer, err := nats_mod.Run(ctx, "nats:2.10-alpine", testcontainers.WithWaitStrategy(nil))
+	natsContainer, err := nats_mod.Run(ctx, "nats:2.10-alpine",
+		testcontainers.WithCmd("-js"),
+	)
 	require.NoError(t, err)
 	defer func() {
 		_ = natsContainer.Terminate(context.Background())

@@ -36,7 +36,7 @@ func setupTestRedis(t *testing.T) *platform.RedisClient {
 	addr, err := redisContainer.ConnectionString(ctx)
 	require.NoError(t, err, "redis connection string")
 
-	client, err := platform.NewRedisClient(ctx, addr)
+	client, err := platform.NewRedisClient(ctx, addr, "")
 	require.NoError(t, err, "create redis client")
 
 	return client

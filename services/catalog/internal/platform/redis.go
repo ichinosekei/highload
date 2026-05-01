@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -11,10 +12,21 @@ type RedisClient struct {
 	*redis.Client
 }
 
-func NewRedisClient(ctx context.Context, addr string) (*RedisClient, error) {
-	opts, err := redis.ParseURL(addr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid redis url: %w", err)
+func NewRedisClient(ctx context.Context, addr, password string) (*RedisClient, error) {
+	var opts *redis.Options
+	var err error
+
+	if strings.HasPrefix(addr, "redis://") {
+		opts, err = redis.ParseURL(addr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid redis url: %w", err)
+		}
+	} else {
+		opts = &redis.Options{
+			Addr:     addr,
+			Password: password,
+			DB:       0, // use default DB
+		}
 	}
 
 	rdb := redis.NewClient(opts)
