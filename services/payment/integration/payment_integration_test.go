@@ -10,11 +10,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/ichinosekei/highload/services/payment/internal/domain"
 	"github.com/ichinosekei/highload/services/payment/internal/platform"

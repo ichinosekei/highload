@@ -1,7 +1,7 @@
 http:
   routers:
     catalog:
-      rule: "PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/restaurants`)"
+      rule: "PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/catalog`)"
       service: catalog
       entryPoints:
         - web

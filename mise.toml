@@ -6,9 +6,9 @@ go = "1.26.2"
 golangci-lint = "2.11.4"
 
 # --- Linting ---
-[tasks.lint]
+[tasks.lint-all]
 run = "mise x golangci-lint@2.11.4 -- golangci-lint run ./..."
-alias = "l"
+alias = "la"
 description = "Run project-wide linter"
 
 [tasks.lint-catalog]
@@ -140,12 +140,19 @@ description = "Deploy to remote VM (pass user@host as arg)"
 
 # --- Load Testing ---
 [tasks.load-smoke]
-run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=smoke - <loadtest/stress.js"
+run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=smoke - <k6/stress.js"
 description = "Run smoke load test (k6 via Docker)"
 
 [tasks.load-stress]
-run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <loadtest/stress.js"
+run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <k6/stress.js"
 description = "Run sustained load test (k6 via Docker)"
+
+[tasks.load-read]
+run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <k6/read_only.js"
+description = "Run read-only load test (Catalog search)"
+[tasks.load-write]
+run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <k6/write_only.js"
+description = "Run write-only load test (Order creation)"
 
 [tasks.measure-baseline]
 run = "mise run load-stress > docs/baseline_iteration_0.txt"

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/ichinosekei/highload/services/notification/internal/domain"
 )
 

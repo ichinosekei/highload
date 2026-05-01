@@ -5,17 +5,18 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	"github.com/ichinosekei/highload/services/notification/internal/app"
 	"github.com/ichinosekei/highload/services/notification/internal/domain"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func TestService_ProcessOrderCreated(t *testing.T) {
 	t.Parallel()
 	mockSender := new(domain.MockNotificationSender)
-	logger := shared_logger.NewLogger("local", "test")
+	logger := shared_logger.NewLogger("test", "test")
 	svc := app.NewService(mockSender, logger)
 
 	userID := uuid.New()

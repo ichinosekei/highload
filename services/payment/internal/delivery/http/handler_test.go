@@ -3,7 +3,6 @@ package http_test
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,12 +14,13 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	payment_http "github.com/ichinosekei/highload/services/payment/internal/delivery/http"
 	"github.com/ichinosekei/highload/services/payment/internal/domain"
 )
 
 func newTestLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return shared_logger.NewLogger("test", "test")
 }
 
 func setupRouter(h *payment_http.Handler) http.Handler {

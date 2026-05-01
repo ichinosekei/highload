@@ -236,7 +236,7 @@ services:
       - APP_ENV=${APP_ENV:-local}
       - PORT=8082
       - POSTGRES_URL=postgres://${POSTGRES_USER:-postgres_user}:${POSTGRES_PASSWORD:-postgres_password}@postgres:5432/orders_db?sslmode=disable
-      - REDIS_ADDR=redis://redis:6379
+      - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
       - NATS_URL=nats://nats:4222
     healthcheck:

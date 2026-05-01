@@ -9,6 +9,7 @@ formatters:
   enable:
     - gofumpt
     - golines
+    - gci
   settings:
     gofumpt:
       extra-rules: true
@@ -16,6 +17,12 @@ formatters:
     golines:
       max-len: 120
       reformat-tags: false
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/ichinosekei/highload)
+      custom-order: true
 
 linters:
   enable:

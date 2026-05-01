@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	defaultLimit = 20
-	maxLimit     = 100
+	defaultLimit      = 20
+	maxLimit          = 100
+	maxConcurrentReqs = 100
 )
 
 type Handler struct {
@@ -35,7 +36,7 @@ func NewHandler(
 		menuRes:   menuRes,
 		search:    search,
 		logger:    logger,
-		searchSem: make(chan struct{}, 100), // Limit search to 100 concurrent requests
+		searchSem: make(chan struct{}, maxConcurrentReqs), // Limit search to 100 concurrent requests
 	}
 }
 

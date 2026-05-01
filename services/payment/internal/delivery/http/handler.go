@@ -9,10 +9,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/sony/gobreaker/v2"
 
 	"github.com/ichinosekei/highload/internal/resilience"
 	"github.com/ichinosekei/highload/services/payment/internal/domain"
-	"github.com/sony/gobreaker/v2"
 )
 
 type Handler struct {

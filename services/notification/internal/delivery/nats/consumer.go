@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/nats-io/nats.go/jetstream"
+
 	"github.com/ichinosekei/highload/services/notification/internal/domain"
 	"github.com/ichinosekei/highload/services/notification/internal/platform"
-	"github.com/nats-io/nats.go/jetstream"
 )
 
 type Consumer struct {

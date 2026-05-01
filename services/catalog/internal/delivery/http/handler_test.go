@@ -2,7 +2,6 @@ package http_test
 
 import (
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,17 +10,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-
-	"github.com/ichinosekei/highload/services/catalog/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	catalog_http "github.com/ichinosekei/highload/services/catalog/internal/delivery/http"
+	"github.com/ichinosekei/highload/services/catalog/internal/domain"
 )
 
 func newTestLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return shared_logger.NewLogger("test", "test")
 }
 
 func setupRouter(h *catalog_http.Handler) http.Handler {
@@ -479,7 +478,7 @@ func TestSearch_InternalError(t *testing.T) {
 	mockSearcher := new(domain.MockRestaurantSearcher)
 	mockSearcher.
 		On("Search", mock.Anything, mock.Anything).
-		Return(nil, errTest)
+		Return(nil, assert.AnError)
 
 	h := catalog_http.NewHandler(
 		&domain.MockMenuRestaurantReader{},
@@ -492,7 +491,13 @@ func TestSearch_InternalError(t *testing.T) {
 
 	setupRouter(h).ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp domain.SearchResult
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Empty(t, resp.Items)
+	assert.Equal(t, int64(0), resp.Total)
 }
 
 // --- Health Check ---

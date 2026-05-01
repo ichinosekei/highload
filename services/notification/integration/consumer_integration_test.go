@@ -7,14 +7,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	shared_logger "github.com/ichinosekei/highload/internal/logger"
-	"github.com/ichinosekei/highload/services/notification/internal/delivery/nats"
-	"github.com/ichinosekei/highload/services/notification/internal/domain"
-	"github.com/ichinosekei/highload/services/notification/internal/platform"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	nats_mod "github.com/testcontainers/testcontainers-go/modules/nats"
+
+	shared_logger "github.com/ichinosekei/highload/internal/logger"
+	"github.com/ichinosekei/highload/services/notification/internal/delivery/nats"
+	"github.com/ichinosekei/highload/services/notification/internal/domain"
+	"github.com/ichinosekei/highload/services/notification/internal/platform"
 )
 
 const testTimeout = 60 * time.Second
@@ -49,7 +50,7 @@ func TestConsumer_Integration(t *testing.T) {
 
 	// 3. Initialize Service and Consumer
 	mockService := new(domain.MockNotificationService)
-	logger := shared_logger.NewLogger("local", "test")
+	logger := shared_logger.NewLogger("test", "test")
 	consumer := nats.NewConsumer(natsClient, mockService, logger)
 
 	err = consumer.Start(ctx)

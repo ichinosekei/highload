@@ -17,9 +17,12 @@ func NewLogger(env, serviceName string) *slog.Logger {
 
 	opts := &slog.HandlerOptions{Level: level}
 
-	if env == "prod" {
+	switch env {
+	case "prod":
 		handler = slog.NewJSONHandler(os.Stdout, opts)
-	} else {
+	case "test":
+		handler = slog.DiscardHandler
+	default:
 		handler = tint.NewHandler(os.Stdout, &tint.Options{Level: level})
 	}
 

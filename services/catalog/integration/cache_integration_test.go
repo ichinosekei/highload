@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/redis"
 
 	"github.com/ichinosekei/highload/services/catalog/internal/domain"
 	"github.com/ichinosekei/highload/services/catalog/internal/platform"
 	"github.com/ichinosekei/highload/services/catalog/internal/repository"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func setupTestRedis(t *testing.T) *platform.RedisClient {
