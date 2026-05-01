@@ -38,16 +38,16 @@ http:
   middlewares:
     catalog-ratelimit:
       rateLimit:
-        average: 1000
-        burst: 200
+        average: 2000
+        burst: 500
     order-ratelimit:
       rateLimit:
-        average: 100
-        burst: 50
+        average: 500
+        burst: 200
     payment-ratelimit:
       rateLimit:
-        average: 50
-        burst: 20
+        average: 200
+        burst: 100
     compress:
       compress: {}
 

@@ -91,3 +91,27 @@ docker compose -f docker-compose.yaml -f docker-compose.scaled.yaml up -d
 
 ### Ресурсы
 Лимиты ресурсов строго ограничены в `docker-compose.yaml` (суммарно под 2 vCPU / 8 GB RAM), что соответствует требованиям к развертыванию на VM.
+
+---
+
+## ✅ Качество кода (бонус)
+
+Помимо основных требований, в проекте реализованы практики обеспечения качества:
+
+### Линтер
+Все сервисы проходят проверку `golangci-lint` с [единой конфигурацией](.golangci.yml):
+```bash
+mise run lint        # или: golangci-lint run ./...
+```
+
+### Unit-тесты
+Юнит-тесты с использованием `testify/mock` для всех доменных слоёв:
+```bash
+mise run test        # или: go test ./services/*/...
+```
+
+### Интеграционные тесты
+Интеграционные тесты с использованием `testcontainers-go` (Postgres, Redis, Meilisearch):
+```bash
+mise run test-integration  # или: go test -tags=integration ./services/*/internal/integration/...
+```

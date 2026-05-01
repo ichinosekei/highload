@@ -10,7 +10,7 @@ import (
 
 const (
 	maxConns        = 20
-	minConns        = 5
+	minConns        = 20
 	maxConnIdleTime = 30 * time.Minute
 )
 
