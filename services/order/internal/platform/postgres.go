@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	maxConns        = 10
-	minConns        = 2
+	maxConns        = 20
+	minConns        = 5
 	maxConnIdleTime = 30 * time.Minute
 )
 

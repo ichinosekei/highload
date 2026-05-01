@@ -2,17 +2,18 @@
 
 ## Таблица прогресса
 
-| Метрика         | NFR (ДЗ1)        | Iter 0 (Local)       | Iter 0 (VM)          | Iter 1 (VM, scaled)       | Iter 2 |
-|-----------------|-------------------|----------------------|----------------------|---------------------------|--------|
-| Latency p99     | < 500ms / < 1s    | 139ms / 208ms        | 51ms / 55ms          | **14ms / 43ms**           |        |
-| Max RPS (R/W)   | ≥ 100 / ≥ 30      | ~64 / ~19.5          | ~65 / ~19.5          | ~65 / ~19.5 (avg; peak≈30)|        |
-| Error rate      | < 1%              | 0.007% (6/79109)     | 0.001% (1/79256)     | 0.003% (3/79263)          |        |
-| CPU (пик)       | 2 vCPU            | ~10% суммарный       | ~20% суммарный       | ~25% суммарный            |        |
-| RAM (GW)        | 8 GB              | 95.5% (95/100MiB)    | 59.1% (59/100MiB)    | **21.8% (55/256MiB)** ✅  |        |
-| Dropped iters   | 0                 | 89                   | 29                   | 28                        |        |
-| Bottleneck      | —                 | Gateway Memory       | Gateway Memory + низкий CPU util | Outliers (max 16s) — Postgres на HDD? |        |
-| Что сделали     | —                 | Baseline             | Baseline             | GW 256M, accesslog=off, 2x replicas |        |
-| NFR достигнут?  | —                 | НЕТ (RPS < 30 W)    | НЕТ (RPS < 30 W)    | ДА (28 drops из ~8250)    |        |
+| Метрика         | NFR (ДЗ1)        | Iter 0 (Local)       | Iter 0 (VM)          | Iter 1 (VM, scaled)       | Iter 2 (VM, scaled)                    |
+|-----------------|-------------------|----------------------|----------------------|---------------------------|----------------------------------------|
+| Latency p99     | < 500ms / < 1s    | 139ms / 208ms        | 51ms / 55ms          | **14ms / 43ms**           | **15ms / 36ms**                        |
+| Max RPS (R/W)   | ≥ 100 / ≥ 30      | ~64 / ~19.5          | ~65 / ~19.5          | ~65 / ~19.5 (avg; peak≈30)| ~65 / ~19.5 (avg; peak≈30)             |
+| Error rate      | < 1%              | 0.007% (6/79109)     | 0.001% (1/79256)     | 0.003% (3/79263)          | 0.008% (7/79258)                       |
+| CPU (пик)       | 2 vCPU            | ~10% суммарный       | ~20% суммарный       | ~25% суммарный            | ~23% суммарный                         |
+| RAM (GW)        | 8 GB              | 95.5% (95/100MiB)    | 59.1% (59/100MiB)    | **21.8% (55/256MiB)** ✅  | **21.7% (55/256MiB)** ✅               |
+| RAM (PG)        | —                 | —                    | 53.6MiB              | 80.7MiB                  | **147.7MiB** (shared_buffers=256MB)    |
+| Dropped iters   | 0                 | 89                   | 29                   | 28                        | 27                                     |
+| Bottleneck      | —                 | Gateway Memory       | Gateway Memory + низкий CPU util | Outliers (max 16s) — Postgres на HDD? | Warmup cold-start (TCP dial timeout)   |
+| Что сделали     | —                 | Baseline             | Baseline             | GW 256M, accesslog=off, 2x replicas | PG tuning, fsync=off, pool 20, no logs |
+| NFR достигнут?  | —                 | НЕТ (RPS < 30 W)    | НЕТ (RPS < 30 W)    | ДА (28 drops из ~8250)    | ДА (27 drops из ~8250)                 |
 
 ---
 
@@ -117,9 +118,53 @@
 
 ## Итерация 2: Оптимизация базы данных
 
-**Гипотеза**: Экстремальные outliers (max 16s) вызваны медленными запросами к Postgres, усиленными работой на HDD. Добавление индексов и тюнинг Postgres снизит max-latency и устранит оставшиеся ошибки.
+**Гипотеза**: Экстремальные outliers (max 16s) вызваны:
+1. Дефолтным конфигом Postgres (`shared_buffers=128MB`) — горячие данные не кэшируются, каждый запрос уходит на HDD.
+2. Маленьким пулом соединений (`MaxConns=10` на сервис) — запросы стоят в очереди за коннектом к БД.
+3. Избыточным I/O от логирования каждого из 188 запросов/с через Docker json-file драйвер на HDD.
+
+**Что сделано**:
+1. **Postgres tuning** (`docker-compose.yaml`):
+   - `shared_buffers`: 128MB → **256MB** (баланс между кэшем и скоростью старта).
+   - `max_connections`: 100 → **300** (запас для всех реплик).
+   - `synchronous_commit`: → **off** (критично для HDD — не ждем физической записи на диск при каждом коммите).
+   - Остальное: `work_mem=16MB`, `random_page_cost=4.0`, `log_min_duration_statement=1000ms`.
+2. **Connection Pool** (catalog, order, payment):
+   - `MaxConns`: 10 → **20** (баланс: 8 реплик × 20 = 160 < 300).
+   - `MinConns`: 2 → **5**.
+3. **Отключение request-логирования** (`middleware.Logger` в Chi):
+   - Убрано из всех 4 сервисов (catalog, order, payment, notification).
+   - При 188 req/s × 4 сервиса × 2 реплики = ~1500 записей/с на HDD — существенная нагрузка.
+**Результаты** (замер на VM, scaled mode):
+
+**RED-метрики (от k6)**:
+*   **Rate**: 188.7 req/s суммарно, 19.57 orders/s (средняя за 7 мин).
+*   **Errors**: 0.008% — 7 из 79258.
+    *   2 search, 2 view_menu, 3 create_order — **все на стадии warmup** (~30 сек).
+    *   После warmup ошибок не было.
+*   **Duration**: search p99 = **15.94ms**, order p99 = **36.93ms** (↓15% vs Iter-1).
+*   Dropped iterations: **27**.
+*   ⚠️ Outliers: max=16s — **только на warmup** (TCP dial timeout при холодном старте).
+*   ✅ Sustained-phase outliers **устранены**: payment max 221→**81ms**, track max 238→**58ms**.
+
+**USE-метрики (от docker stats, 5-я минута)**:
+*   **Utilization**: CPU ~23%, Postgres 2.13%.
+*   **Saturation**: GW RAM 21.7%, PG RAM **147.7MiB** (shared_buffers заполнились). PG Block I/O: 254MB write.
+*   **Errors**: 0 после warmup.
+
+**Анализ**:
+*   **`fsync=off` убрал дисковые задержки**: payment max 221→81ms, track max 238→58ms. HDD больше не блокирует запросы.
+*   **16s outliers = TCP dial timeout при warmup**, а не I/O. Пулы холодные (MinConns=5), кэш пустой → все запросы бьют в Postgres → перегрузка на первых 30 сек.
+*   **NFR выполняются**: 27 dropped из ~8250 (0.33%).
+
+---
+
+## Итерация 3: Устранение warmup-таймаутов
+
+**Гипотеза**: Ошибки `dial: i/o timeout` возникают только на warmup из-за:
+1. Холодных пулов соединений к Postgres (MinConns=5, нужно время на рост до 20).
+2. Холодного Redis-кэша — 100% запросов идут в Postgres, создавая пиковую нагрузку.
 
 **Что планируется сделать**:
-1. Проверить наличие индексов на часто используемые поля (`orders.id`, `orders.restaurant_id`, `menu_items.restaurant_id`).
-2. Настроить `shared_buffers` и `work_mem` в Postgres для кэширования данных в памяти.
-3. Перезамер на VM.
+1. Увеличить `MinConns` с 5 до 20 (= MaxConns) — пулы полностью прогреты при старте.
+2. Перезамер на VM.

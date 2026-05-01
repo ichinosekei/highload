@@ -64,7 +64,6 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 
 	// --- Router ---
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(serverTimeout))
 
