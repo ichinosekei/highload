@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	shared_handler "github.com/ichinosekei/highload/internal/delivery/http"
 	shared_logger "github.com/ichinosekei/highload/internal/logger"
 	"github.com/ichinosekei/highload/services/catalog/internal/app"
 	"github.com/ichinosekei/highload/services/catalog/internal/config"
@@ -93,8 +92,6 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(serverTimeout))
-
-	r.Get("/health", shared_handler.HealthCheck)
 
 	r.Route("/api/v1", h.RegisterRoutes)
 

@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	shared_http "github.com/ichinosekei/highload/internal/delivery/http"
 	"github.com/ichinosekei/highload/services/catalog/internal/domain"
 )
 
@@ -42,6 +43,7 @@ func NewHandler(
 
 // RegisterRoutes mounts all catalog routes onto the given router.
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/catalog/health", shared_http.HealthCheck)
 	r.Get("/catalog/restaurants", h.ListRestaurants)
 	r.Get("/catalog/restaurants/{restaurantID}/menu", h.GetRestaurantMenu)
 	r.Get("/search", h.Search)

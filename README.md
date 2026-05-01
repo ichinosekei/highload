@@ -12,14 +12,12 @@
 docker compose up -d
 ```
 
-### 2. Проверка доступности (Health Check)
-Убедитесь, что все компоненты системы живы и здоровы:
-
-*   **API Gateway (Traefik)**: `curl -i http://localhost/health` (Ожидается: `200 OK`)
-*   **Catalog Service**: `curl -i http://localhost:8080/health` (Ожидается: `200 OK`)
-*   **Order Service**: `curl -i http://localhost:8082/health` (Ожидается: `200 OK`)
-*   **Payment Service**: `curl -i http://localhost:8083/health` (Ожидается: `200 OK`)
-*   **Notification Service**: `curl -i http://localhost:8081/health` (Ожидается: `200 OK`)
+#### Проверка доступности (Health Checks)
+*   **API Gateway (Traefik)**: `curl -i http://localhost/ping`
+*   **Catalog**: `curl -i http://localhost/api/v1/catalog/health`
+*   **Order**: `curl -i http://localhost/api/v1/orders/health`
+*   **Payment**: `curl -i http://localhost/api/v1/payments/health`
+*   **Notification**: `curl -i http://localhost/api/v1/notifications/health`
 
 ---
 
@@ -80,6 +78,13 @@ docker run --rm -i --network=host grafana/k6 run - <k6/stress.js
 
 ### Горизонтальное масштабирование (Scale x2)
 Для запуска системы с несколькими репликами сервисов (2 реплики для Catalog и Order) выполните:
+
+**Вариант А (mise):**
+```bash
+mise run scale
+```
+
+**Вариант Б (Docker):**
 ```bash
 docker compose -f docker-compose.yaml -f docker-compose.scaled.yaml up -d
 ```

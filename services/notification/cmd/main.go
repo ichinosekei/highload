@@ -68,7 +68,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(serverTimeout))
 
-	r.Get("/health", shared_handler.HealthCheck)
+	r.Get("/api/v1/notifications/health", shared_handler.HealthCheck)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

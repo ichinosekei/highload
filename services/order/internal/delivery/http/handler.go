@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	shared_http "github.com/ichinosekei/highload/internal/delivery/http"
 	"github.com/ichinosekei/highload/internal/resilience"
 	"github.com/ichinosekei/highload/services/order/internal/domain"
 )
@@ -43,6 +44,7 @@ func NewHandler(
 
 // RegisterRoutes mounts all order routes onto the given router.
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/orders/health", shared_http.HealthCheck)
 	r.Post("/orders", h.CreateOrder)
 	r.Post("/orders/{orderID}/status", h.UpdateOrderStatus)
 	r.Get("/orders/{orderID}/track", h.TrackOrder)

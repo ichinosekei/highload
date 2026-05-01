@@ -1,7 +1,7 @@
 http:
   routers:
     catalog:
-      rule: "PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/catalog`)"
+      rule: "PathPrefix(`/api/v1/catalog`) || PathPrefix(`/api/v1/search`)"
       service: catalog
       entryPoints:
         - web
@@ -27,6 +27,14 @@ http:
         - payment-ratelimit
         - compress
 
+    notification:
+      rule: "PathPrefix(`/api/v1/notifications`)"
+      service: notification
+      entryPoints:
+        - web
+      middlewares:
+        - compress
+
   middlewares:
     catalog-ratelimit:
       rateLimit:
@@ -49,7 +57,7 @@ http:
         servers:
           - url: "http://catalog:8080"
         healthCheck:
-          path: /health
+          path: /api/v1/catalog/health
           interval: "5s"
           timeout: "3s"
         responseForwarding:
@@ -60,7 +68,7 @@ http:
         servers:
           - url: "http://order:8082"
         healthCheck:
-          path: /health
+          path: /api/v1/orders/health
           interval: "5s"
           timeout: "3s"
 
@@ -69,6 +77,15 @@ http:
         servers:
           - url: "http://payment:8083"
         healthCheck:
-          path: /health
+          path: /api/v1/payments/health
+          interval: "5s"
+          timeout: "3s"
+
+    notification:
+      loadBalancer:
+        servers:
+          - url: "http://notification:8081"
+        healthCheck:
+          path: /api/v1/notifications/health
           interval: "5s"
           timeout: "3s"

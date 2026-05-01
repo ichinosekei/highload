@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sony/gobreaker/v2"
 
+	shared_http "github.com/ichinosekei/highload/internal/delivery/http"
 	"github.com/ichinosekei/highload/internal/resilience"
 	"github.com/ichinosekei/highload/services/payment/internal/domain"
 )
@@ -43,6 +44,7 @@ func NewHandler(
 
 // RegisterRoutes mounts all payment routes onto the given router.
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/payments/health", shared_http.HealthCheck)
 	r.Post("/payments", h.CreatePayment)
 	r.Post("/payments/webhook", h.HandleWebhook)
 }

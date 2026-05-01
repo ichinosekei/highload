@@ -131,6 +131,7 @@ services:
       - "--api.insecure=true"
       - "--providers.file.filename=/etc/traefik/dynamic.yaml"
       - "--entrypoints.web.address=:80"
+      - "--ping=true"
       - "--accesslog=true"
     ports:
       - "80:80"
@@ -186,7 +187,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://127.0.0.1:8080/health",
+          "http://127.0.0.1:8080/api/v1/catalog/health",
         ]
       interval: 10s
       timeout: 3s
@@ -240,7 +241,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://127.0.0.1:8082/health",
+          "http://127.0.0.1:8082/api/v1/orders/health",
         ]
       interval: 10s
       timeout: 3s
@@ -292,7 +293,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://127.0.0.1:8083/health",
+          "http://127.0.0.1:8083/api/v1/payments/health",
         ]
       interval: 10s
       timeout: 3s
@@ -338,7 +339,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://127.0.0.1:8081/health",
+          "http://127.0.0.1:8081/api/v1/notifications/health",
         ]
       interval: 10s
       timeout: 3s
