@@ -132,7 +132,7 @@ services:
       - "--providers.file.filename=/etc/traefik/dynamic.yaml"
       - "--entrypoints.web.address=:80"
       - "--ping=true"
-      - "--accesslog=true"
+      - "--accesslog=false"
     ports:
       - "80:80"
       - "8084:8080" # Dashboard
@@ -143,8 +143,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.1"
-          memory: 100M
+          cpus: "0.2"
+          memory: 256M
 
   catalog:
     build:
