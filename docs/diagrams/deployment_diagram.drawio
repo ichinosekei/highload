@@ -44,13 +44,13 @@
         <mxCell id="tqU2vSp7nRODALZN_GoL-366" parent="tqU2vSp7nRODALZN_GoL-365" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;strokeWidth=2;rounded=1;" value="🐘 PostgreSQL&lt;br&gt;&lt;b&gt;MASTER&lt;/b&gt;" vertex="1">
           <mxGeometry height="90" width="120" x="260" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="tqU2vSp7nRODALZN_GoL-367" parent="tqU2vSp7nRODALZN_GoL-365" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;rounded=1;" value="⚡ Redis Node" vertex="1">
+        <mxCell id="tqU2vSp7nRODALZN_GoL-367" parent="tqU2vSp7nRODALZN_GoL-365" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;rounded=1;" value="⚡ Valkey Node" vertex="1">
           <mxGeometry height="90" width="120" x="460" y="70" as="geometry" />
         </mxCell>
         <mxCell id="tqU2vSp7nRODALZN_GoL-368" parent="tqU2vSp7nRODALZN_GoL-365" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D946EF;rounded=1;" value="📨 NATS Cluster" vertex="1">
           <mxGeometry height="90" width="120" x="650" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="tqU2vSp7nRODALZN_GoL-369" parent="tqU2vSp7nRODALZN_GoL-365" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;rounded=1;" value="🔍 Meilisearch" vertex="1">
+        <mxCell id="tqU2vSp7nRODALZN_GoL-369" parent="tqU2vSp7nRODALZN_GoL-365" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;rounded=1;" value="🔍 Meilisearch&lt;div&gt;&lt;b&gt;LEADER&lt;/b&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="90" width="120" x="50" y="70" as="geometry" />
         </mxCell>
         <mxCell id="tqU2vSp7nRODALZN_GoL-398" edge="1" parent="tqU2vSp7nRODALZN_GoL-357" source="tqU2vSp7nRODALZN_GoL-359" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;rounded=1;strokeColor=#059669;fontSize=9;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="tqU2vSp7nRODALZN_GoL-361" value="HTTP :8080">
@@ -99,13 +99,13 @@
         <mxCell id="tqU2vSp7nRODALZN_GoL-379" parent="tqU2vSp7nRODALZN_GoL-378" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DC2626;rounded=1;" value="🐘 PostgreSQL&lt;br&gt;&lt;b&gt;SYNC SLAVE&lt;/b&gt;" vertex="1">
           <mxGeometry height="90" width="120" x="260" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="tqU2vSp7nRODALZN_GoL-380" parent="tqU2vSp7nRODALZN_GoL-378" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;rounded=1;" value="⚡ Redis Node" vertex="1">
+        <mxCell id="tqU2vSp7nRODALZN_GoL-380" parent="tqU2vSp7nRODALZN_GoL-378" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;rounded=1;" value="⚡ Valkey Node" vertex="1">
           <mxGeometry height="90" width="120" x="460" y="70" as="geometry" />
         </mxCell>
         <mxCell id="tqU2vSp7nRODALZN_GoL-381" parent="tqU2vSp7nRODALZN_GoL-378" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D946EF;rounded=1;" value="📨 NATS Cluster" vertex="1">
           <mxGeometry height="90" width="120" x="640" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="4UDzZp6bHPNHDv5mH7Cy-23" parent="tqU2vSp7nRODALZN_GoL-378" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;rounded=1;" value="🔍 Meilisearch" vertex="1">
+        <mxCell id="4UDzZp6bHPNHDv5mH7Cy-23" parent="tqU2vSp7nRODALZN_GoL-378" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;rounded=1;" value="🔍 Meilisearch&lt;div&gt;&lt;b&gt;FOLLOWER&lt;/b&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="90" width="120" x="50" y="70" as="geometry" />
         </mxCell>
         <mxCell id="tqU2vSp7nRODALZN_GoL-402" edge="1" parent="tqU2vSp7nRODALZN_GoL-370" source="tqU2vSp7nRODALZN_GoL-372" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;rounded=1;strokeColor=#059669;fontSize=9;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="tqU2vSp7nRODALZN_GoL-375" value="HTTP :8082">
@@ -169,13 +169,13 @@
         <mxCell id="tqU2vSp7nRODALZN_GoL-391" parent="tqU2vSp7nRODALZN_GoL-390" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DC2626;rounded=1;" value="🐘 PostgreSQL&lt;br&gt;&lt;b&gt;ASYNC SLAVE&lt;/b&gt;" vertex="1">
           <mxGeometry height="90" width="120" x="240" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="tqU2vSp7nRODALZN_GoL-392" parent="tqU2vSp7nRODALZN_GoL-390" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;rounded=1;" value="⚡ Redis Node" vertex="1">
+        <mxCell id="tqU2vSp7nRODALZN_GoL-392" parent="tqU2vSp7nRODALZN_GoL-390" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;rounded=1;" value="⚡ Valkey Node" vertex="1">
           <mxGeometry height="90" width="120" x="440" y="70" as="geometry" />
         </mxCell>
         <mxCell id="tqU2vSp7nRODALZN_GoL-393" parent="tqU2vSp7nRODALZN_GoL-390" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D946EF;rounded=1;" value="📨 NATS Cluster" vertex="1">
           <mxGeometry height="90" width="120" x="650" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="eo0gIR-I2GBkbTs9V0YE-3" parent="tqU2vSp7nRODALZN_GoL-390" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;rounded=1;" value="🔍 Meilisearch" vertex="1">
+        <mxCell id="eo0gIR-I2GBkbTs9V0YE-3" parent="tqU2vSp7nRODALZN_GoL-390" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;rounded=1;" value="🔍 Meilisearch&lt;div&gt;&lt;b&gt;FOLLOWER&lt;/b&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="90" width="120" x="42" y="70" as="geometry" />
         </mxCell>
         <mxCell id="tqU2vSp7nRODALZN_GoL-424" edge="1" parent="tqU2vSp7nRODALZN_GoL-382" source="tqU2vSp7nRODALZN_GoL-386" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;rounded=1;strokeColor=#EA580C;fontSize=8;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" target="tqU2vSp7nRODALZN_GoL-392" value=":6379">
@@ -338,7 +338,7 @@
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="3220" y="2510" />
-              <mxPoint x="4040" y="2510" />
+              <mxPoint x="4120" y="2510" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -674,9 +674,9 @@
             <mxPoint y="164" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="4UDzZp6bHPNHDv5mH7Cy-7" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.363;entryY=0.984;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#DC2626;" target="tqU2vSp7nRODALZN_GoL-376" value="">
+        <mxCell id="4UDzZp6bHPNHDv5mH7Cy-7" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.884;entryY=1.043;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#DC2626;" target="tqU2vSp7nRODALZN_GoL-376" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="3195" y="2480" as="sourcePoint" />
+            <mxPoint x="3289" y="2480" as="sourcePoint" />
             <mxPoint x="3450" y="2270" as="targetPoint" />
           </mxGeometry>
         </mxCell>
@@ -702,7 +702,7 @@
         <mxCell id="4UDzZp6bHPNHDv5mH7Cy-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;align=left;spacingLeft=10;" value="&lt;b&gt;Notes&lt;/b&gt;&lt;br&gt;•&amp;nbsp;&lt;b&gt;Cross-AZ Failover&lt;/b&gt;: Система спроектирована по принципу «Shared Nothing» на уровне приложений. Балансировщики (ALB и Traefik) настроены на проверку здоровья (Health Checks) и автоматическое перенаправление трафика в соседние зоны доступности при сбоях.&lt;br&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;•&amp;nbsp;&lt;/span&gt;&lt;b&gt;Infrastructure Resilience&lt;/b&gt;: Базы данных и брокеры сообщений развернуты как распределенные кластеры. Репликация данных между AZ-a, AZ-b и AZ-c гарантирует сохранность данных (RPO=0 для критичных логов) и непрерывность работы при потере целой зоны.&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;•&amp;nbsp;&lt;/span&gt;&lt;b&gt;Service Discovery&lt;/b&gt;: Использование внутренних сервисных адресов (ClusterIP) изолирует логику приложений от физического расположения инстансов, обеспечивая их полную взаимозаменяемость.&lt;/div&gt;" vertex="1">
           <mxGeometry height="190" width="410" x="4590" y="2480" as="geometry" />
         </mxCell>
-        <mxCell id="eo0gIR-I2GBkbTs9V0YE-14" edge="1" parent="1" source="tqU2vSp7nRODALZN_GoL-369" style="endArrow=none;dashed=1;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#2563EB;" target="4UDzZp6bHPNHDv5mH7Cy-23" value="">
+        <mxCell id="eo0gIR-I2GBkbTs9V0YE-14" edge="1" parent="1" source="tqU2vSp7nRODALZN_GoL-369" style="endArrow=classic;dashed=1;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#2563EB;startArrow=classic;startFill=1;endFill=1;" target="4UDzZp6bHPNHDv5mH7Cy-23" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
             <Array as="points">
               <mxPoint x="1890" y="2620" />
@@ -712,12 +712,12 @@
             <mxPoint x="2670" y="2330" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="eo0gIR-I2GBkbTs9V0YE-17" connectable="0" parent="eo0gIR-I2GBkbTs9V0YE-14" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Leader-Based Proxying&lt;/font&gt;" vertex="1">
+        <mxCell id="eo0gIR-I2GBkbTs9V0YE-17" connectable="0" parent="eo0gIR-I2GBkbTs9V0YE-14" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Replication &amp;amp; Write Proxying&lt;/font&gt;" vertex="1">
           <mxGeometry relative="1" x="0.5313" y="3" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="eo0gIR-I2GBkbTs9V0YE-15" edge="1" parent="1" style="endArrow=none;dashed=1;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#2563EB;" target="eo0gIR-I2GBkbTs9V0YE-3" value="">
+        <mxCell id="eo0gIR-I2GBkbTs9V0YE-15" edge="1" parent="1" style="endArrow=classic;dashed=1;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#2563EB;endFill=1;" target="eo0gIR-I2GBkbTs9V0YE-3" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
             <Array as="points">
               <mxPoint x="3722" y="2620" />
