@@ -154,6 +154,7 @@ description = "Run sustained load test (k6 via Docker)"
 [tasks.load-read]
 run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <k6/read_only.js"
 description = "Run read-only load test (Catalog search)"
+
 [tasks.load-write]
 run = "docker run --rm -i --network=host grafana/k6 run --env PROFILE=load - <k6/write_only.js"
 description = "Run write-only load test (Order creation)"

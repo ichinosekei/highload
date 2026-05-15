@@ -11,10 +11,10 @@ set -euo pipefail
 REMOTE_HOST="${1:?Usage: $0 user@host [remote_path]}"
 REMOTE_PATH="${2:-highload}"
 IMAGES=(
-  "highload-catalog"
-  "highload-order"
-  "highload-payment"
-  "highload-notification"
+	"highload-catalog"
+	"highload-order"
+	"highload-payment"
+	"highload-notification"
 )
 ARCHIVE_NAME="highload-images.tar.gz"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -o IdentitiesOnly=yes"
@@ -30,7 +30,7 @@ echo "✅ Images built successfully."
 
 echo ""
 echo ">>> Step 2/5: Saving images to archive..."
-docker save "${IMAGES[@]}" | gzip > "${ARCHIVE_NAME}"
+docker save "${IMAGES[@]}" | gzip >"${ARCHIVE_NAME}"
 ARCHIVE_SIZE=$(du -sh "${ARCHIVE_NAME}" | cut -f1)
 echo "✅ Archive created: ${ARCHIVE_NAME} (${ARCHIVE_SIZE})"
 
@@ -42,15 +42,15 @@ ssh ${SSH_OPTS} "${REMOTE_HOST}" "mkdir -p ${REMOTE_PATH}"
 scp ${SSH_OPTS} "${ARCHIVE_NAME}" "${REMOTE_HOST}:${REMOTE_PATH}/"
 
 scp ${SSH_OPTS} \
-  docker-compose.yaml \
-  docker-compose.scaled.yaml \
-  traefik_dynamic.yaml \
-  "${REMOTE_HOST}:${REMOTE_PATH}/"
+	docker-compose.yaml \
+	docker-compose.scaled.yaml \
+	traefik_dynamic.yaml \
+	"${REMOTE_HOST}:${REMOTE_PATH}/"
 
 ssh ${SSH_OPTS} "${REMOTE_HOST}" "mkdir -p ${REMOTE_PATH}/deployments/postgres"
 scp ${SSH_OPTS} \
-  deployments/postgres/init-db.sql \
-  "${REMOTE_HOST}:${REMOTE_PATH}/deployments/postgres/"
+	deployments/postgres/init-db.sql \
+	"${REMOTE_HOST}:${REMOTE_PATH}/deployments/postgres/"
 
 echo "✅ Files transferred."
 
