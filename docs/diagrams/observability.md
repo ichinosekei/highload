@@ -67,7 +67,7 @@ graph TD
 1.  **Level 1: Overview** (Для SRE/Management):
     *   **Бизнес**: GMV (₽/мин), кол-во заказов, активные пользователи.
     *   **Health**: Общий Error Rate (%), SLI/SLO burn-rate.
-    *   **Infrastructure**: Ключевой кворум (PG, Redis, NATS) и replication lag.
+    *   **Infrastructure**: Ключевой кворум (PG, Valkey, NATS) и replication lag.
 
 2.  **Level 2: Service** (Для разработчиков):
     *   **RED-паттерн**: Rate (RPS), Errors (4xx/5xx), Duration (p50/p95/p99).
@@ -90,6 +90,7 @@ graph TD
 *   `service`: имя микросервиса.
 *   `trace_id`: для сквозного отслеживания запроса.
 *   `msg`: человекочитаемое сообщение.
+*   `user_id_hash`: анонимизированный ID пользователя для трекинга.
 *   `env`: prod/stage.
 
 ### Что логируем

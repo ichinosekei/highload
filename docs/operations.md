@@ -8,10 +8,11 @@
 FoodDelivery Platform — это высоконагруженная система доставки еды, объединяющая клиентов, рестораны и курьеров. Система обеспечивает поиск по каталогу, оформление и оплату заказов, отслеживание доставки в реальном времени и систему уведомлений.
 
 ### Нагрузка
-Профиль нагрузки характеризуется ярко выраженными «обеденными» и «вечерними» пиками (коэффициент пика — до 6). 
+Профиль нагрузки характеризуется ярко выраженными «обеденными» и «вечерними» пиками (коэффициент пика — до 6).
 *   **MAU:** 12 млн.
 *   **DAU:** 3 млн.
 *   **Пиковый онлайн:** ~81 000 одновременных пользователей.
+*   **Заказов в день:** **1 125 000** (реалистичный сценарий для зрелой системы).
 
 | Операция | Avg RPS | Peak RPS | SLO p99 |
 | :--- | :--- | :--- | :--- |
@@ -21,149 +22,193 @@ FoodDelivery Platform — это высоконагруженная систем
 | Подтверждение оплаты | 108 | 200 | < 2500 ms (incl. PSP) |
 | Статусы/Трекинг | 1 500 | 2 000 | < 200 ms |
 
-### Критический путь
-Критический путь для выручки: **Client -> API Gateway -> Order Service -> PostgreSQL + NATS**. Оплата и уведомления вынесены в асинхронную обработку, чтобы клиент не ждал внешних провайдеров (PSP/Push) на горячем пути оформления заказа.
+### Топология и сетевые зоны
+Архитектура развернута в Yandex Cloud в одном регионе (`ru-central1`) и распределена по 3 зонам доступности (AZ-a, b, c).
 
-### Deployment Diagram
-Архитектура развернута в Yandex Cloud в 3 зонах доступности (AZ) для обеспечения отказоустойчивости.
-
-*   **Схема в формате JPG (Draw.io):** [deployment_diagram.jpg](./diagrams/deployment_diagram.jpg)
-*   **Исходный файл диаграммы:** [deployment_diagram.drawio](./diagrams/deployment_diagram.drawio)
-*   **Описание сетевой топологии:** [deployment.md](./diagrams/deployment.md)
-
-### Сервисы
-
-| Сервис | Replicas / AZ | Ответственность | Stateful / Stateless | Зона |
-| :--- | :--- | :--- | :--- | :--- |
-| **API Gateway (Traefik)** | x2 per AZ (6 total) | Routing, Rate Limiting, TLS | Stateless | Public (DMZ) |
-| **Catalog Service** | x2 per AZ (6 total) | Поиск, меню, рестораны | Stateless | Private |
-| **Order Service** | x2 per AZ (6 total) | Корзина, заказы, статусы | Stateless | Private |
-| **Payment Service** | x2 per AZ (6 total) | Платежи, интеграция с PSP | Stateless | Private |
-| **Notification Service** | x1 per AZ (3 total) | Push, SMS уведомления | Stateless | Private |
-| **PostgreSQL 18** | Master + 2 Standby | Основное хранилище (ACID) | Stateful | Private Data |
-| **Redis 7** | 3-node Cluster | Кэш, корзины, трекинг | Stateful | Private Data |
-| **Meilisearch** | 2 nodes (Active-Active) | Поисковый индекс | Stateful | Private Data |
-| **NATS JetStream** | 3 nodes (Cluster) | Брокер (At-least-once) | Stateful | Private Data |
-
-### Адресация
-
-| Направление | Адрес / FQDN | Порт | Тип IP / Сеть |
+| Зона (Subnet) | CIDR | Назначение | Что внутри |
 | :--- | :--- | :--- | :--- |
-| Client -> ALB | `api.fooddelivery.ru` | :443 | Static Public VIP |
-| **VPC CIDR** | `10.128.0.0/16` | — | Internal Network |
-| AZ-a / AZ-b / AZ-c | `10.128.0.0/24`, `10.129.0.0/24`, `10.130.0.0/24` | — | Subnets |
-| Gateway -> Catalog | `catalog.svc.cluster.local` | :8080 | ClusterIP (Internal) |
-| Gateway -> Order | `order.svc.cluster.local` | :8082 | ClusterIP (Internal) |
-| Services -> Postgres | `postgres.db.internal` | :5432 | Private DNS (RW/RO) |
-| Services -> NATS | `nats.infra.internal` | :4222 | Cluster IP |
+| **Public DMZ** | `10.128.0.0/16` | Входной трафик | ALB, Traefik Ingress, NAT Gateways |
+| **Private App-a** | `10.128.1.0/24` | Backend AZ-a | Catalog, Order, Payment (Replica 1) |
+| **Private App-b** | `10.129.1.0/24` | Backend AZ-b | Catalog, Order, Payment (Replica 2) |
+| **Private App-c** | `10.130.1.0/24` | Backend AZ-c | Catalog, Order, Payment (Replica 3) |
+| **Private Data** | `10.128.2.0/24, 10.129.2.0/24, 10.130.2.0/24` | Хранилища | Managed PG, Valkey Cluster, NATS nodes |
+
+### Связи и протоколы (Service Connections)
+
+| Источник → Назначение | Протокол / Порт | Назначение |
+| :--- | :--- | :--- |
+| Client → ALB | HTTPS :443 | Вход в систему (Public VIP) |
+| ALB → Traefik | HTTP :80 | Проксирование внутрь DMZ |
+| Traefik → Catalog | HTTP :8080 | Поиск и меню |
+| Traefik → Notification | HTTP :8081 | Система уведомлений |
+| Traefik → Order | HTTP :8082 | Создание и статусы заказов |
+| Traefik → Payment | HTTP :8083 | Инициация платежей |
+| Microservices → Valkey | TCP :6379 | Кэширование и корзины |
+| Catalog → PostgreSQL | TCP :5432 | SQL запросы (меню, рестораны) |
+| Catalog → Meilisearch | HTTP :7700 | Полнотекстовый поиск |
+| Order → NATS | TCP :4222 | Публикация событий (Outbox pattern) |
+| Payment → PSP (Внешний) | HTTPS :443 | Инициация транзакций |
+
+### Список сервисов
+| Сервис | Replicas / AZ | Ответственность | Stateful / Stateless |
+| :--- | :--- | :--- | :--- |
+| **API Gateway (Traefik)** | x2 per AZ (6 total) | Routing, Rate Limiting, TLS | Stateless |
+| **Catalog Service** | x2 per AZ (6 total) | Поиск, меню, рестораны | Stateless |
+| **Order Service** | x2 per AZ (6 total) | Корзина, заказы, статусы | Stateless |
+| **Payment Service** | x2 per AZ (6 total) | Платежи, интеграция с PSP | Stateless |
+| **Notification Service** | x1 per AZ (3 total) | Push, SMS уведомления | Stateless |
+| **PostgreSQL 18** | HA (3 nodes) | Основное хранилище (ACID) | Managed |
+| **Valkey™ 7** | 3 hosts (Cluster) | Кэш, корзины, трекинг | Managed |
+| **Meilisearch** | 3 nodes | Поисковый индекс ресторанов | Compute VMs |
+| **NATS JetStream** | 3 nodes (Cluster) | Брокер событий (Event-driven) | Compute VMs |
+
+> **Примечание по Valkey**: В Yandex Cloud используется **Managed Service for Valkey™** — полностью совместимая с Redis OSS альтернатива, обеспечивающая высокую доступность и производительность для кэширования и работы с состоянием.
 
 ---
 
 ### 1.2. Стратегия деплоя
 
 ### Ключевые сервисы
+| Сервис | Стратегия | Почему подходит | Миграции БД |
+| :--- | :--- | :--- | :--- |
+| **Catalog** | Rolling | Read-heavy, допускается сосуществование версий. | Expand/Contract. |
+| **Payment** | Canary | **Критичный контур.** Риск бага = прямые убытки. Сначала 5%. | Expand/Contract. |
+| **Order** | Canary -> Rolling | Самый критичный write-path. Ошибка ведет к потере заказов. | Только Expand/Contract. |
 
-| Сервис | Стратегия | Почему подходит | Zero-downtime контракт | Миграции БД |
-| :--- | :--- | :--- | :--- | :--- |
-| **Catalog** | Rolling | Read-heavy, допускается сосуществование версий. | Readiness: `/health` (PG+Meili); Liveness: process; Graceful: 15s. | Expand/Contract. |
-| **Payment** | Canary | **Критичный контур.** Риск бага = прямые убытки. Сначала 5%, затем 100%. | Readiness: `/health`; Graceful: 60s (завершение транзакций). | Expand/Contract. |
-| **Order** | Canary -> Rolling | Самый критичный write-path. Ошибка ведет к потере заказов. | Readiness: `/health` (PG+NATS); Graceful: 30s (http.Server.Shutdown). | Только Expand/Contract. |
-| **Data Layers** | Managed Rolling | Минимизация ручных операций на stateful-слое. | Health-check на кворум/репликацию перед переключением лидерства. | Schema migrations CI Job. |
+### Zero-downtime контракт
+Применимо ко всем stateless-сервисам (Catalog, Order, Payment):
+
+**Probes (K8s style):**
+- **Readiness:** `/health/ready` — проверка связи с PG/NATS/Valkey. При неудаче под исключается из балансировки.
+- **Liveness:** `/health/live` — проверка, что процесс не «завис». Перезапуск пода при провале.
+- **Startup:** `/health/ready` (initialDelay: 10s) — время на прогрев соединений.
+
+**Graceful Shutdown:**
+1. **SIGTERM** — сервис переключает `/health/ready` в 503.
+2. **PreStopHook (10-15s)** — ожидание, пока Ingress/ALB обновит список эндпоинтов.
+3. **Drain** — завершение обработки активных (in-flight) запросов (до 30s; для Payment — до 60s).
+4. **Exit** — корректное закрытие соединений с БД и брокером.
 
 ### Подход к миграциям БД (Expand/Contract)
-1.  **Expand**: Добавление новых колонок/таблиц (nullable или с default). Приложение начинает писать в обе версии.
-2.  **Migrate**: Фоновая миграция старых данных в новую структуру (батчами).
-3.  **Contract**: Переключение чтения на новую структуру. После подтверждения стабильности — удаление старых колонок.
-*В текущей реализации схема БД инициализируется через `init-db.sql` при старте контейнера (Docker init-db). В Prod-окружении планируется переход на запуск миграций как отдельный шаг CI/CD или K8s Job.*
+1.  **Expand**: Добавление новых колонок/таблиц (nullable). Приложение пишет в обе версии.
+2.  **Migrate**: Фоновая миграция данных батчами.
+3.  **Contract**: Переключение чтения на новую схему. Удаление старых колонок в следующем релизе.
+
+**Где критично:** `orders`, `payments`, `saga_state` (финансовая целостность).
+**Где не применимо:** `Valkey` (кэш можно прогреть), `Meilisearch` (атомарное переключение алиаса индекса).
 
 ---
 
 ### 1.3. Observability
 
 ### Алерты (Golden Signals)
+Алерты настроены на критический путь (Checkout и Payment).
 
-| Сигнал | Метрика | Порог | На что | Почему этот сигнал? |
-| :--- | :--- | :--- | :--- | :--- |
-| **Latency** | p99 `POST /orders` | > 500ms (window 5m) | Order Service (Checkout) | Рост задержки на чекауте ведет к брошенным корзинам (Direct Revenue Impact). |
-| **Errors** | % 5xx `confirm_payment` | > 1% (window 2m) | Payment Service | Ошибки оплаты — самый критичный сигнал отказоустойчивости (НФТ-006). |
-| **Traffic** | Total RPS change | < 50% от нормы (10m) | API Gateway / Network | Резкое падение трафика сигнализирует о проблемах с DNS, LB или магистральным провайдером. |
-| **Saturation** | Postgres CPU / Conn Pool | > 80% (window 5m) | DB Layer (PostgreSQL) | БД — бутылочное горлышко. Насыщение ресурсов предсказывает скорый каскадный отказ всей системы. |
-
-*Другие сигналы (например, задержка поиска) опущены в алертах, так как они не блокируют критический путь заказа и могут быть исследованы в плановом режиме через дашборды.*
+| Сигнал | Метрика (PromQL) | Порог | Почему? |
+| :--- | :--- | :--- | :--- |
+| **Latency** | `histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{route="/api/v1/orders"}[5m]))` | > 500ms | Прямое влияние на брошенные корзины. |
+| **Errors** | `sum(rate(http_requests_total{status=~"5..", service="payment"}[5m])) / sum(rate(http_requests_total{service="payment"}[5m]))` | > 1.0% | Ошибки оплаты = прямые убытки. |
+| **Traffic** | `sum(rate(traefik_requests_total[10m]))` | < 50% vs baseline | Сигнал о проблемах на уровне DNS/LB или магистрали. |
+| **Saturation** | `pg_stat_activity_count / pg_settings_max_connections` | > 85% | Предвестник каскадного отказа БД. |
 
 ### Дашборды (3 уровня)
-1.  **Overview**: Бизнес-метрики (GMV, заказы в мин), общий Uptime, Error Rate по всей системе.
-2.  **Service-level**: RED-метрики (Rate, Errors, Duration) для каждого микросервиса (Yandex Monitoring).
-3.  **Diagnostic**: USE-метрики (Utilization, Saturation, Errors) для ресурсов (CPU, RAM, Disk), трейсы (Jaeger/Tempo), поиск по логам (Cloud Logging).
+1.  **Overview (Level 1)**: GMV (руб/мин), % успешных оплат, суммарный RPS, статус SLO. Для дежурного менеджера.
+2.  **Service RED (Level 2)**: **R**ate, **E**rrors, **D**uration в разрезе каждого микросервиса. Версия пода, CPU/RAM лимиты.
+3.  **Infrastructure USE (Level 3)**: **U**tilization, **S**aturation, **E**rrors по ресурсам (PG locks, NATS queue depth, Valkey hit rate, Meilisearch index size).
 
-### Логи
+### Логирование
 *   **Формат**: Структурированный JSON.
-*   **Обязательные поля**: `trace_id`, `request_id`, `service`, `level`, `msg`, `ts`, `user_id_hash`.
-*   **Что логируем**: Входящие запросы (метаданные), ошибки (stack trace), важные события (статус заказа изменен).
-*   **НЕ логируем**: PII (телефоны, адреса), данные карт, секреты, токены.
+*   **Пример**: `{"ts": "...", "level": "error", "trace_id": "...", "service": "order-service", "msg": "failed to create order", "user_id_hash": "sha256:...", "env": "prod"}`
+*   **Обязательные поля**: `ts`, `level`, `service`, `trace_id`, `msg`, `user_id_hash`, `env`.
+*   **Политика безопасности (PII)**:
+    - **НЕ логируем**: ФИО, полные адреса, телефоны (только хэш или маска), данные карт (PCI DSS), пароли.
+    - **Маскирование**: `email: a***o@mail.ru`.
 
 ---
 
 ## Часть 2: Доступность
 
-### Целевая доступность
-**99.95%** availability в месяц для критического пути (Checkout).
+### 2.1 Целевая доступность (Composite SLA)
+Мы используем разные уровни SLA для разных контуров, так как их бизнес-вес различен.
 
-### Бизнес-обоснование (Money Risk)
-При текущей нагрузке (1.125 млн заказов/день) и среднем чеке **1200 руб.** с комиссией платформы **20%**:
-*   **Дневной GMV**: ~1.35 млрд руб.
-*   **Пиковый GMV в минуту**: ~20.6 млн руб.
-*   **Риск выручки платформы в пик**: **~4.1 млн руб/мин.**
-*   **10 минут простоя в пик**: Потеря ~41 млн руб. выручки и колоссальный рост нагрузки на поддержку.
-99.95% (21.6 мин простоя/мес) — это необходимый минимум для защиты экономики проекта.
-
-### RPO и RTO
-| Компонент | RPO | RTO | Стратегия / Обоснование |
+| Контур | Целевая доступность | Простой/год | Обоснование |
 | :--- | :--- | :--- | :--- |
-| **PostgreSQL** | 0 | 5 мин | Sync-репликация (RPO=0) обязательна для заказов. Failover силами Managed Service. |
-| **NATS** | 0 | 2 мин | JetStream с репликацией сообщений на 3 узла. Гарантия at-least-once. |
-| **Redis** | 15 мин | 5 мин | Кэш и корзины. Потеря не критична (RPO>0), восстановимо из БД. |
-| **Meilisearch** | 30 мин | 15 мин | Поисковый индекс. Восстановление из снэпшота или полный реиндекс. |
+| **Платежи** | **99.99%** | 53 мин | Прямая выручка. Ошибка = потеря денег (НФТ-006). |
+| **Заказы (Checkout)** | **99.95%** | 4.4 часа | Критичный write-path. Простой = клиент уходит к конкуренту. |
+| **Каталог и Поиск** | **99.9%** | 8.8 часа | Read-heavy. При падении возможна деградация на кэш. |
+| **Уведомления** | **99.5%** | 1.8 дня | Best-effort. События в NATS не теряются, дойдут позже. |
 
-### Maintenance Window
-Система работает в режиме **24/7/365** без запланированных простоев. 
-*   **Регламентные работы**: Все обновления инфраструктуры и БД проводятся без остановки сервиса (Rolling updates, Failovers).
-*   **Окно обслуживания**: В случае исключительной необходимости (Major version upgrade БД с локом) — воскресенье **03:00 – 05:00 MSK** (минимум заказов). Оповещение пользователей за 48 часов.
+### 2.2 Бизнес-обоснование (Money Risk)
+Расчёт стоимости простоя для обоснования затрат на HA-инфраструктуру:
+
+- **Заказов в день**: 1 125 000.
+- **Средний чек**: 1 200 руб.
+- **Выручка платформы (GMV)**: 1.35 млрд руб/день.
+- **Комиссия (Revenue)**: 270 млн руб/день (~11.25 млн руб/час).
+- **В пик (Peak_coef=2)**: **~22.5 млн руб/час** потерь при полном простое.
+
+**Дельта SLA:**
+- Переход с 99.9% (8.8ч простоя) на 99.99% (0.9ч простоя) спасает до **~170 млн руб. выручки в год**, что полностью окупает затраты на Managed DB HA-кластеры и SRE-смену.
+
+### 2.3 Стратегия резервирования
+| Компонент | Схема | Геораспределение | RPO / RTO |
+| :--- | :--- | :--- | :--- |
+| **Stateless Services** | Active/Active | 3 AZ (ru-central1-a/b/c) | 0 / < 1 мин |
+| **PostgreSQL** | Master + Sync Replica + Async | 3 AZ (M-a, S-b, A-c) | 0 / 2-5 мин |
+| **Valkey / NATS** | Clustered | 3 AZ (Quorum) | 0 / < 2 мин |
+| **Object Storage** | Native Replication | Multi-AZ (out-of-the-box) | 0 / 0 |
+
+### 2.4 Maintenance Window
+- **Когда**: Вторник/Четверг **03:00–05:00 MSK** (минимум заказов).
+- **Что делаем**: Мажорные апгрейды БД, тяжелые миграции схемы (Contract phase), учения по failover.
+- **Что НЕ делаем**: Релизы в Payment Service, работы без утвержденного rollback-плана.
 
 ---
 
 ## Часть 3: TCO в Yandex Cloud
 
-### Исходные тарифы (ориентиры)
-*   **vCPU**: ~1.24 руб/час; **RAM**: ~0.33 руб/ГБ-час.
-*   **Managed DB vCPU**: ~1.88 руб/час; **SSD**: ~15.7 руб/ГБ-мес.
-
-### Сценарии масштабирования (Infrastructure only)
-| Компонент | 1x (Текущая) | 2x Рост | 5x Рост |
+### 3.1 Маппинг компонентов на сервисы YC
+| Наш компонент | Сервис YC | Конфигурация (Sizing) | Обоснование |
 | :--- | :--- | :--- | :--- |
-| Managed Kubernetes | 65 000 ₽ | 120 000 ₽ | 280 000 ₽ |
-| Managed PostgreSQL | 58 000 ₽ | 115 000 ₽ | 250 000 ₽ |
-| Managed Redis + NATS | 36 000 ₽ | 65 000 ₽ | 160 000 ₽ |
-| Meilisearch (Compute) | 15 000 ₽ | 30 000 ₽ | 75 000 ₽ |
-| Network & Storage | 25 000 ₽ | 45 000 ₽ | 110 000 ₽ |
-| **Итого Infra** | **199 000 ₽** | **375 000 ₽** | **875 000 ₽** |
+| **K8s Nodes** | Managed K8s | 6 nodes: 4 vCPU / 16 GB / 100 GB SSD | По 2 ноды в каждой AZ для отказоустойчивости приложений. |
+| **PostgreSQL** | Managed PG | 3 hosts: 4 vCPU / 16 GB / 500 GB SSD | Master + Sync Slave + Async Slave. RPO=0. |
+| **NATS JetStream** | Compute Cloud | 3 VMs: 2 vCPU / 8 GB / 100 GB SSD | Отказоустойчивый брокер (At-least-once). |
+| **Valkey** | Managed Valkey | 3 hosts: 2 vCPU / 8 GB / 100 GB SSD | Высокодоступный кэш и сессии. |
+| **Meilisearch** | Compute Cloud | 3 VMs: 4 vCPU / 16 GB / 200 GB SSD | Быстрый поиск по ресторанам и меню. |
+| **Network & CDN** | ALB + CDN | 5 TB (1x) → 25 TB (5x) egress | Входной балансировщик и раздача статики. |
 
-### Операционные затраты (OPEX)
-| Статья | 1x | 2x | 5x | Комментарий |
-| :--- | :--- | :--- | :--- | :--- |
-| **SRE On-call** | 250 000 ₽ | 400 000 ₽ | 800 000 ₽ | Поддержка 24/7, реакция на инциденты. |
-| **Maintenance** | 50 000 ₽ | 80 000 ₽ | 150 000 ₽ | Регламентные работы, backup drills. |
-| **Инструменты** | 10 000 ₽ | 20 000 ₽ | 50 000 ₽ | SaaS мониторинг, alerting tooling. |
-| **Итого OPEX** | **310 000 ₽** | **500 000 ₽** | **1 000 000 ₽** | |
+### 3.2 Сценарии масштабирования (Infra руб/мес)
+| Категория | 1x (Текущая) | 2x Рост | 5x Рост |
+| :--- | :---: | :---: | :---: |
+| **Compute + K8s** | 60 000 ₽ | 115 000 ₽ | 260 000 ₽ |
+| **PostgreSQL** | 60 000 ₽ | 115 000 ₽ | 250 000 ₽ |
+| **NATS JetStream** | 20 000 ₽ | 35 000 ₽ | 80 000 ₽ |
+| **Valkey** | 25 000 ₽ | 40 000 ₽ | 105 000 ₽ |
+| **Meilisearch** | 35 000 ₽ | 70 000 ₽ | 160 000 ₽ |
+| **Storage + Network** | 25 000 ₽ | 50 000 ₽ | 115 000 ₽ |
+| **Monitoring + Log** | 5 000 ₽ | 10 000 ₽ | 25 000 ₽ |
+| **Итого Infra** | **~230 000 ₽** | **~435 000 ₽** | **~995 000 ₽** |
 
-### Итог (Total TCO)
-| Сценарий | Infrastructure | OPEX | Total TCO | Рост к 1x |
-| :--- | :--- | :--- | :--- | :--- |
-| **1x нагрузка** | 199 000 ₽ | 310 000 ₽ | **509 000 ₽** | 1.0x |
-| **2x рост** | 375 000 ₽ | 500 000 ₽ | **875 000 ₽** | 1.7x |
-| **5x рост** | 875 000 ₽ | 1 000 000 ₽ | **1 875 000 ₽** | 3.7x |
+### 3.3 Операционные затраты (OPEX)
+| Статья OPEX | 1x | 2x | 5x |
+| :--- | :--- | :--- | :--- |
+| **SRE / On-call** | 190 000 ₽ | 280 000 ₽ | 560 000 ₽ |
+| **Maintenance / DR** | 40 000 ₽ | 60 000 ₽ | 100 000 ₽ |
+| **Support / Tooling** | 30 000 ₽ | 50 000 ₽ | 120 000 ₽ |
+| **Итого OPEX** | **~260 000 ₽** | **~390 000 ₽** | **~780 000 ₽** |
+| **TCO (Infra + OPEX)** | **~490 000 ₽** | **~825 000 ₽** | **~1 775 000 ₽** |
 
-### Анализ: Что дороже всего?
-1.  **OPEX (ФОТ)**: На текущем этапе затраты на людей превышают затраты на облако. Это обосновано стоимостью обеспечения 99.95% (необходима квалифицированная смена).
-2.  **Managed PostgreSQL**: Самый дорогой ресурс в облаке. Требование RPO=0 обязывает использовать 3 ноды с синхронной репликацией на SSD.
-3.  **Масштабируемость**: При росте трафика в 5x итоговая стоимость растет всего в 3.7x за счет фиксированных затрат на Master-ноды и базовый On-call.
+### 3.4 Анализ: Что дороже всего?
+1.  **Лидеры затрат**: Kubernetes (Compute), PostgreSQL и Meilisearch. Это основные драйверы стоимости, обеспечивающие производительность API и поиска.
+2.  **Эффект масштаба**: При росте нагрузки в 5x, инфраструктура растет в 4.3x, а суммарный TCO (включая OPEX) всего в **3.6x**. Это подтверждает эффективность облачной модели.
+3.  **Оптимизация**: Основной потенциал экономии — вынос медиа-контента на CDN и оптимизация retention логов.
+
+### 3.5 Тарифная политика (Unit Prices)
+Расчеты произведены на основе официальных тарифов Yandex Cloud: [https://yandex.cloud/ru/docs/compute/pricing](https://yandex.cloud/ru/docs/compute/pricing):
+- **Compute vCPU (Intel Ice Lake)**: 1.24 ₽ / vCPU-час.
+- **Compute RAM (Intel Ice Lake)**: 0.33 ₽ / ГБ-час.
+- **Managed PG vCPU (AMD Zen 4)**: ~1.88 ₽ / vCPU-час (Base 1.26 + Managed Markup).
+- **Managed PG RAM (AMD Zen 4)**: ~0.51 ₽ / ГБ-час (Base 0.34 + Managed Markup).
+- **Network SSD**: 14.33 ₽ / ГБ-месяц (на базе 0.0199 ₽/ГБ-час).
+- **ALB Unit**: 2.63 ₽ / час.
+- **Egress трафик**: 1.42 ₽ / ГБ (после первых 100 ГБ).
