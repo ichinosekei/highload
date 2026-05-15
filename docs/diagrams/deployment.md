@@ -4,9 +4,9 @@
 
 ## Визуализация
 
-![Deployment Diagram](./deployment.png)
+![Deployment Diagram](./deployment_diagram.jpg)
 
-> **Примечание:** Для редактирования используйте файл [deployment.drawio](./deployment.drawio) в приложении diagrams.net (draw.io).
+> **Примечание:** Для редактирования используйте файл [deployment.drawio](./deployment_diagram.drawio) в приложении diagrams.net (draw.io).
 
 ## Сетевая топология
 
